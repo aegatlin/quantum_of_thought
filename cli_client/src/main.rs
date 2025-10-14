@@ -1,5 +1,5 @@
 use clap::Parser;
-use notes::NoteStore;
+use notes::Notes;
 
 #[derive(Parser)]
 #[command(name = "qot")]
@@ -12,7 +12,7 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
-    let mut note_store = NoteStore::new();
+    let mut note_store = Notes::new();
 
     if cli.args.is_empty() {
         eprintln!("Usage: qot <content> or qot list");

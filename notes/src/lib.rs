@@ -2,11 +2,18 @@ use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-struct Note {
+struct NoteCrdt {
     doc: AutoCommit,
 }
 
-impl Note {
+#[derive(Debug)]
+pub enum NoteError {
+    NotFound(String),
+    ExtractionError(String),
+    DeserializationError(String),
+}
+
+impl NoteCrdt {
     fn new(content: &str) -> Result<Self, NoteError> {
         let id = Uuid::now_v7().to_string();
         let mut doc = AutoCommit::new();
@@ -66,51 +73,44 @@ impl Note {
     }
 }
 
-#[derive(Debug)]
-pub enum NoteError {
-    NotFound(String),
-    ExtractionError(String),
-    DeserializationError(String),
-}
-
 #[derive(Debug, Clone)]
-pub struct NoteData {
+pub struct Note {
     pub id: String,
     pub content: String,
 }
 
-impl TryFrom<&Note> for NoteData {
+impl TryFrom<&NoteCrdt> for Note {
     type Error = NoteError;
 
-    fn try_from(note: &Note) -> Result<Self, NoteError> {
+    fn try_from(note_crdt: &NoteCrdt) -> Result<Self, NoteError> {
         Ok(Self {
-            id: note.id()?,
-            content: note.content()?,
+            id: note_crdt.id()?,
+            content: note_crdt.content()?,
         })
     }
 }
 
-pub struct NoteStore {
-    notes: HashMap<String, Note>,
+pub struct Notes {
+    note_crdts: HashMap<String, NoteCrdt>,
 }
 
-impl NoteStore {
+impl Notes {
     pub fn new() -> Self {
         Self {
-            notes: HashMap::new(),
+            note_crdts: HashMap::new(),
         }
     }
 
-    pub fn create(&mut self, content: &str) -> Result<NoteData, NoteError> {
-        let note = Note::new(content)?;
-        let note_data: NoteData = (&note).try_into()?;
-        self.notes.insert(note_data.id.clone(), note);
-        Ok(note_data)
+    pub fn create(&mut self, content: &str) -> Result<Note, NoteError> {
+        let note_crdt = NoteCrdt::new(content)?;
+        let note: Note = (&note_crdt).try_into()?;
+        self.note_crdts.insert(note.id.clone(), note_crdt);
+        Ok(note)
     }
 
-    pub fn get(&self, id: &str) -> Result<NoteData, NoteError> {
-        match self.notes.get(id) {
-            Some(note) => note.try_into(),
+    pub fn get(&self, id: &str) -> Result<Note, NoteError> {
+        match self.note_crdts.get(id) {
+            Some(note_crdt) => note_crdt.try_into(),
             None => Err(NoteError::NotFound(format!(
                 "note not found with id: {}",
                 id
@@ -119,8 +119,8 @@ impl NoteStore {
     }
 
     pub fn to_bytes(&mut self, id: &str) -> Result<Vec<u8>, NoteError> {
-        match self.notes.get_mut(id) {
-            Some(note) => Ok(note.to_bytes()),
+        match self.note_crdts.get_mut(id) {
+            Some(note_crdt) => Ok(note_crdt.to_bytes()),
             None => Err(NoteError::NotFound(format!(
                 "note not found with id: {}",
                 id
@@ -128,10 +128,10 @@ impl NoteStore {
         }
     }
 
-    pub fn from_bytes(&mut self, data: &[u8]) -> Result<NoteData, NoteError> {
-        let note = Note::from_bytes(data)?;
-        let note_data: NoteData = (&note).try_into()?;
-        Ok(note_data)
+    pub fn from_bytes(&mut self, data: &[u8]) -> Result<Note, NoteError> {
+        let note_crdt = NoteCrdt::from_bytes(data)?;
+        let note: Note = (&note_crdt).try_into()?;
+        Ok(note)
     }
 }
 
@@ -140,46 +140,46 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_note() {
+    fn test_note_crdt() {
         let expected_content = "hello, world";
-        let result = Note::new(expected_content);
+        let result = NoteCrdt::new(expected_content);
         assert!(result.is_ok());
 
-        let note = result.unwrap();
-        let content = note.content();
+        let note_crdt = result.unwrap();
+        let content = note_crdt.content();
         assert!(content.is_ok_and(|c| c == expected_content));
 
-        let id = note.id();
+        let id = note_crdt.id();
         assert!(id.is_ok_and(|i| i.len() > 0))
     }
 
     #[test]
-    fn test_note_data() {
+    fn test_note() {
         let expected_content = "hello, world";
-        let note = Note::new(expected_content).unwrap();
+        let note_crdt = NoteCrdt::new(expected_content).unwrap();
 
-        let note_data: NoteData = (&note).try_into().unwrap();
+        let note: Note = (&note_crdt).try_into().unwrap();
 
-        assert_eq!(note_data.content, expected_content);
-        assert!(note_data.id.len() > 0);
+        assert_eq!(note.content, expected_content);
+        assert!(note.id.len() > 0);
     }
 
     #[test]
-    fn test_note_store_create() {
+    fn test_notes_create() {
         let expected_content = "hello, world";
-        let mut note_store = NoteStore::new();
+        let mut notes = Notes::new();
 
-        let note = note_store.create(expected_content);
+        let note = notes.create(expected_content);
         assert!(note.is_ok_and(|n| n.content == expected_content));
     }
 
     #[test]
-    fn test_note_store_get() {
+    fn test_notes_get() {
         let expected_content = "hello, world";
-        let mut note_store = NoteStore::new();
-        let id = note_store.create(expected_content).unwrap().id;
+        let mut notes = Notes::new();
+        let note_id = notes.create(expected_content).unwrap().id;
 
-        let note = note_store.get(&id);
+        let note = notes.get(&note_id);
         assert!(note.is_ok_and(|n| n.content == expected_content))
     }
 }
