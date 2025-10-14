@@ -1,5 +1,5 @@
 use clap::Parser;
-use notes::Notes;
+use notes::{Note, NoteError, Notes};
 
 #[derive(Parser)]
 #[command(name = "qot")]
@@ -12,7 +12,7 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
-    let mut note_store = Notes::new();
+    let mut note_service = NoteService::new();
 
     if cli.args.is_empty() {
         eprintln!("Usage: qot <content> or qot list");
@@ -28,14 +28,31 @@ fn main() {
         // Everything is note content
         let content = cli.args.join(" ");
 
-        match note_store.create(&content) {
-            Ok(note_data) => {
-                println!("Created note: {}", note_data.content);
+        match note_service.create(&content) {
+            Ok(note) => {
+                println!("Created note: {}", note.content);
             }
             Err(e) => {
                 eprintln!("Error creating note: {:?}", e);
                 std::process::exit(1);
             }
         }
+    }
+}
+
+struct NoteService {
+    notes: Notes,
+}
+
+impl NoteService {
+    fn new() -> Self {
+        Self {
+            notes: Notes::new(),
+        }
+    }
+
+    fn create(&mut self, content: &str) -> Result<Note, NoteError> {
+        let note = self.notes.create(content)?;
+        Ok(note)
     }
 }
