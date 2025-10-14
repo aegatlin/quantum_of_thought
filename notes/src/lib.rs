@@ -1,17 +1,13 @@
-use automerge::{
-    transaction::Transactable, AutoCommit, ObjType, ReadDoc, ScalarValue, Value, ROOT,
-};
-use std::{borrow::Cow, collections::HashMap};
+use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 struct Note {
-    /// Internally a UUIDv7 is used, but for FFI compatibility it is a `String`
-    pub id: String,
     doc: AutoCommit,
 }
 
 impl Note {
-    fn new(content: &str) -> Self {
+    fn new(content: &str) -> Result<Self, NoteError> {
         let id = Uuid::now_v7().to_string();
         let mut doc = AutoCommit::new();
 
@@ -23,33 +19,34 @@ impl Note {
 
         let _ = doc.update_text(&content_text, content);
 
-        Self { id, doc }
+        Ok(Self { doc })
     }
 
-    fn extract_id(doc: &AutoCommit) -> String {
-        let id = match doc.get(ROOT, "id") {
-            Ok(it) => match it {
-                Some((Value::Scalar(Cow::Owned(ScalarValue::Str(id))), _id_exid)) => id,
-                _ => panic!("idk"),
+    fn id(&self) -> Result<String, NoteError> {
+        match self.doc.get(ROOT, "id") {
+            Ok(res) => match res {
+                Some((v, _)) => Ok(v.to_string()),
+                None => Err(NoteError::ExtractionError(
+                    "problem extracting id".to_string(),
+                )),
             },
-            Err(_err) => panic!("idk"),
-        };
-
-        id.to_string()
+            Err(err) => Err(NoteError::ExtractionError(err.to_string())),
+        }
     }
 
-    fn extract_content(&self) -> String {
-        let content_exid = match self.doc.get(ROOT, "content") {
-            Ok(it) => match it {
-                Some((Value::Object(ObjType::Text), content)) => content,
-                _ => panic!("idk"),
+    fn content(&self) -> Result<String, NoteError> {
+        match self.doc.get(ROOT, "content") {
+            Ok(res) => match res {
+                Some((_, exid)) => match self.doc.text(exid) {
+                    Ok(s) => Ok(s),
+                    Err(err) => Err(NoteError::ExtractionError(err.to_string())),
+                },
+                None => Err(NoteError::ExtractionError(
+                    "problem extracting content".to_string(),
+                )),
             },
-            Err(_err) => panic!("idk"),
-        };
-
-        let content = self.doc.text(content_exid).unwrap();
-
-        content
+            Err(err) => Err(NoteError::ExtractionError(err.to_string())),
+        }
     }
 
     fn to_bytes(&mut self) -> Vec<u8> {
@@ -59,13 +56,21 @@ impl Note {
     /// &[u8] allegedly is the most friendly FFI input type. In JS it is a
     /// Uint8Array. In Swift it is `Data`. In Kotlin it is ByteArray. In
     /// Elixir/Erlang it is binary().
-    fn from_bytes(data: &[u8]) -> Result<Self, String> {
-        let doc = AutoCommit::load(data).map_err(|e| format!("Failed to load: {:?}", e))?;
-
-        let id = Note::extract_id(&doc);
-
-        Ok(Self { id, doc })
+    fn from_bytes(data: &[u8]) -> Result<Self, NoteError> {
+        match AutoCommit::load(data) {
+            Ok(doc) => Ok(Self { doc }),
+            Err(automerge_error) => {
+                Err(NoteError::DeserializationError(automerge_error.to_string()))
+            }
+        }
     }
+}
+
+#[derive(Debug)]
+pub enum NoteError {
+    NotFound(String),
+    ExtractionError(String),
+    DeserializationError(String),
 }
 
 #[derive(Debug, Clone)]
@@ -74,12 +79,14 @@ pub struct NoteData {
     pub content: String,
 }
 
-impl From<&Note> for NoteData {
-    fn from(note: &Note) -> Self {
-        NoteData {
-            id: note.id.clone(),
-            content: note.extract_content(),
-        }
+impl TryFrom<&Note> for NoteData {
+    type Error = NoteError;
+
+    fn try_from(note: &Note) -> Result<Self, NoteError> {
+        Ok(Self {
+            id: note.id()?,
+            content: note.content()?,
+        })
     }
 }
 
@@ -94,26 +101,37 @@ impl NoteStore {
         }
     }
 
-    pub fn create(&mut self, content: &str) -> String {
-        let note = Note::new(content);
-        let id = note.id.clone();
-        self.notes.insert(id.clone(), note);
-        id
+    pub fn create(&mut self, content: &str) -> Result<NoteData, NoteError> {
+        let note = Note::new(content)?;
+        let note_data: NoteData = (&note).try_into()?;
+        self.notes.insert(note_data.id.clone(), note);
+        Ok(note_data)
     }
 
-    pub fn get(&self, id: &str) -> Option<NoteData> {
-        self.notes.get(id).map(|note| note.into())
+    pub fn get(&self, id: &str) -> Result<NoteData, NoteError> {
+        match self.notes.get(id) {
+            Some(note) => note.try_into(),
+            None => Err(NoteError::NotFound(format!(
+                "note not found with id: {}",
+                id
+            ))),
+        }
     }
 
-    pub fn to_bytes(&mut self, id: &str) -> Option<Vec<u8>> {
-        self.notes.get_mut(id).map(|note| note.to_bytes())
+    pub fn to_bytes(&mut self, id: &str) -> Result<Vec<u8>, NoteError> {
+        match self.notes.get_mut(id) {
+            Some(note) => Ok(note.to_bytes()),
+            None => Err(NoteError::NotFound(format!(
+                "note not found with id: {}",
+                id
+            ))),
+        }
     }
 
-    pub fn from_bytes(&mut self, data: &[u8]) -> Result<String, String> {
+    pub fn from_bytes(&mut self, data: &[u8]) -> Result<NoteData, NoteError> {
         let note = Note::from_bytes(data)?;
-        let id = note.id.clone();
-        self.notes.insert(id.clone(), note);
-        Ok(id)
+        let note_data: NoteData = (&note).try_into()?;
+        Ok(note_data)
     }
 }
 
@@ -122,17 +140,46 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_create_note() {
+    fn test_note() {
+        let expected_content = "hello, world";
+        let result = Note::new(expected_content);
+        assert!(result.is_ok());
+
+        let note = result.unwrap();
+        let content = note.content();
+        assert!(content.is_ok_and(|c| c == expected_content));
+
+        let id = note.id();
+        assert!(id.is_ok_and(|i| i.len() > 0))
+    }
+
+    #[test]
+    fn test_note_data() {
+        let expected_content = "hello, world";
+        let note = Note::new(expected_content).unwrap();
+
+        let note_data: NoteData = (&note).try_into().unwrap();
+
+        assert_eq!(note_data.content, expected_content);
+        assert!(note_data.id.len() > 0);
+    }
+
+    #[test]
+    fn test_note_store_create() {
         let expected_content = "hello, world";
         let mut note_store = NoteStore::new();
-        let note_id = note_store.create(expected_content);
-        assert!(!note_id.is_empty());
 
-        let note = note_store.get(&note_id);
-        assert!(note.is_some());
+        let note = note_store.create(expected_content);
+        assert!(note.is_ok_and(|n| n.content == expected_content));
+    }
 
-        let note_data = note.unwrap();
-        assert_eq!(note_data.id, note_id);
-        assert_eq!(note_data.content, expected_content);
+    #[test]
+    fn test_note_store_get() {
+        let expected_content = "hello, world";
+        let mut note_store = NoteStore::new();
+        let id = note_store.create(expected_content).unwrap().id;
+
+        let note = note_store.get(&id);
+        assert!(note.is_ok_and(|n| n.content == expected_content))
     }
 }
