@@ -1,50 +1,61 @@
 import { useEffect, useState } from "react";
-import init, { WasmNotes } from "notes";
+import { NoteStore } from "./NoteStore";
+import { useNoteStore } from "./useNoteStore";
 
 function App() {
-  const [wasmStatus, setWasmStatus] = useState<string>("Initializing WASM...");
+  const [store, setStore] = useState<NoteStore | null>(null);
 
   useEffect(() => {
-    async function initWasm() {
-      try {
-        // Initialize the WASM module
-        await init();
-
-        // Create a WasmNotes instance
-        const notes = new WasmNotes();
-        console.log("✅ Created WasmNotes instance:", notes);
-
-        // Create three notes
-        const note1 = notes.create("First note - testing WASM integration");
-        console.log("📝 Created note 1:", note1);
-
-        const note2 = notes.create("Second note - this is pretty cool!");
-        console.log("📝 Created note 2:", note2);
-
-        const note3 = notes.create("Third note - WASM is working!");
-        console.log("📝 Created note 3:", note3);
-
-        // List all notes
-        const allNotes = notes.list();
-        console.log("📋 List of all notes:", allNotes);
-
-        setWasmStatus("✅ WASM test complete! Check console for results.");
-      } catch (error) {
-        console.error("Failed to initialize WASM:", error);
-        setWasmStatus(`❌ WASM initialization failed: ${error}`);
-      }
-    }
-
-    initWasm();
+    NoteStore.create().then(setStore);
   }, []);
 
+  if (!store) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold tracking-tight">
+            Quantum of Thought
+          </h1>
+          <p className="mt-4 text-muted-foreground">Initializing...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <NotesApp store={store} />;
+}
+
+function NotesApp({ store }: { store: NoteStore }) {
+  const noteStore = useNoteStore(store);
+
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight">
-          Quantum of Thought
-        </h1>
-        <p className="mt-4 text-muted-foreground">{wasmStatus}</p>
+    <div className="min-h-screen bg-background p-8">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-4xl font-bold mb-8">Quantum of Thought</h1>
+
+        <button
+          onClick={() => noteStore.create("New note!")}
+          className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Add Note
+        </button>
+
+        <ul className="space-y-2">
+          {noteStore.notes.map((note) => (
+            <li
+              key={note.id}
+              className="p-4 border rounded flex justify-between items-center"
+            >
+              <span>{note.content}</span>
+              <button
+                onClick={() => noteStore.delete(note.id)}
+                className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
