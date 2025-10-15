@@ -2,6 +2,9 @@ use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
 struct NoteCrdt {
     doc: AutoCommit,
 }
@@ -74,6 +77,7 @@ impl NoteCrdt {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "wasm", derive(serde::Serialize, serde::Deserialize))]
 pub struct Note {
     pub id: String,
     pub content: String,
