@@ -112,16 +112,6 @@ impl Notes {
         Ok(note)
     }
 
-    pub fn get(&self, id: &str) -> Result<Note, NoteError> {
-        match self.note_crdts.get(id) {
-            Some(note_crdt) => note_crdt.try_into(),
-            None => Err(NoteError::NotFound(format!(
-                "note not found with id: {}",
-                id
-            ))),
-        }
-    }
-
     pub fn to_bytes(&mut self, id: &str) -> Result<Vec<u8>, NoteError> {
         match self.note_crdts.get_mut(id) {
             Some(note_crdt) => Ok(note_crdt.to_bytes()),
@@ -136,6 +126,18 @@ impl Notes {
         let note_crdt = NoteCrdt::from_bytes(data)?;
         let note: Note = (&note_crdt).try_into()?;
         Ok(note)
+    }
+
+    // key-value store behaviours
+
+    pub fn get(&self, id: &str) -> Result<Note, NoteError> {
+        match self.note_crdts.get(id) {
+            Some(note_crdt) => note_crdt.try_into(),
+            None => Err(NoteError::NotFound(format!(
+                "note not found with id: {}",
+                id
+            ))),
+        }
     }
 
     pub fn list(&self) -> Result<Vec<Note>, NoteError> {
