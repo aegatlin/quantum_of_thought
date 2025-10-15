@@ -1,5 +1,9 @@
+mod storage;
+
 use clap::Parser;
-use notes::{Note, NoteError, Notes};
+use directories::ProjectDirs;
+use notes::{Note, Notes};
+use storage::{FileSystemStorage, Storage};
 
 #[derive(Parser)]
 #[command(name = "qot")]
@@ -12,7 +16,14 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
-    let mut note_service = NoteService::new();
+
+    let mut note_service = match NoteService::new() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Failed to initialize service: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     if cli.args.is_empty() {
         eprintln!("Usage: qot <content> or qot list");
@@ -22,8 +33,21 @@ fn main() {
     let first_arg = &cli.args[0];
 
     if first_arg == "list" {
-        // For now, just show that list works - we'll add persistence next
-        println!("No notes yet. Create one with: qot get milk");
+        match note_service.list() {
+            Ok(notes) => {
+                if notes.is_empty() {
+                    println!("No notes yet. Create one with: qot get milk");
+                } else {
+                    for note in notes {
+                        println!("{}", note.content);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Error listing notes: {}", e);
+                std::process::exit(1);
+            }
+        }
     } else {
         // Everything is note content
         let content = cli.args.join(" ");
@@ -33,7 +57,7 @@ fn main() {
                 println!("Created note: {}", note.content);
             }
             Err(e) => {
-                eprintln!("Error creating note: {:?}", e);
+                eprintln!("Error creating note: {}", e);
                 std::process::exit(1);
             }
         }
@@ -42,17 +66,56 @@ fn main() {
 
 struct NoteService {
     notes: Notes,
+    storage: FileSystemStorage,
 }
 
 impl NoteService {
-    fn new() -> Self {
-        Self {
+    fn new() -> Result<Self, String> {
+        // Determine storage path using ProjectDirs
+        let proj_dirs =
+            ProjectDirs::from("", "", "qot").ok_or("Failed to determine storage directory")?;
+        let base_path = proj_dirs.data_dir().to_path_buf();
+
+        let storage = FileSystemStorage::new(base_path).map_err(|e| format!("{}", e))?;
+
+        Ok(Self {
             notes: Notes::new(),
-        }
+            storage,
+        })
     }
 
-    fn create(&mut self, content: &str) -> Result<Note, NoteError> {
-        let note = self.notes.create(content)?;
+    fn create(&mut self, content: &str) -> Result<Note, String> {
+        // Create note in memory
+        let note = self.notes.create(content).map_err(|e| format!("{:?}", e))?;
+
+        // Persist to storage
+        let bytes = self
+            .notes
+            .to_bytes(&note.id)
+            .map_err(|e| format!("{:?}", e))?;
+
+        self.storage
+            .set(&note.id, &bytes)
+            .map_err(|e| format!("{}", e))?;
+
         Ok(note)
+    }
+
+    fn list(&mut self) -> Result<Vec<Note>, String> {
+        let uuids = self.storage.list().map_err(|e| format!("{}", e))?;
+
+        let mut note_list = Vec::new();
+        for uuid in uuids {
+            if let Some(bytes) = self.storage.get(&uuid).map_err(|e| format!("{}", e))? {
+                let note = self
+                    .notes
+                    .from_bytes(&bytes)
+                    .map_err(|e| format!("{:?}", e))?;
+
+                note_list.push(note);
+            }
+        }
+
+        Ok(note_list)
     }
 }
