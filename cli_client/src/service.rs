@@ -29,7 +29,7 @@ impl NoteService {
         // Persist to storage
         let bytes = self
             .notes
-            .to_bytes(&note.id)
+            .get_bytes(&note.id)
             .map_err(|e| format!("{:?}", e))?;
 
         self.storage
@@ -48,10 +48,7 @@ impl NoteService {
         let mut note_list = Vec::new();
         for uuid in uuids {
             if let Some(bytes) = self.storage.get(&uuid).map_err(|e| format!("{}", e))? {
-                let note = self
-                    .notes
-                    .from_bytes(&bytes)
-                    .map_err(|e| format!("{:?}", e))?;
+                let note = self.notes.add(&bytes).map_err(|e| format!("{:?}", e))?;
 
                 note_list.push(note);
             }

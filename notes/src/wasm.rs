@@ -38,6 +38,43 @@ impl WasmNotes {
 
         serde_wasm_bindgen::to_value(&notes).map_err(|e| JsValue::from_str(&format!("{}", e)))
     }
+
+    /// Get a specific note by ID
+    /// Returns a JsValue containing the note (id and content)
+    pub fn get(&mut self, id: &str) -> Result<JsValue, JsValue> {
+        let note = self
+            .inner
+            .get(id)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        serde_wasm_bindgen::to_value(&note).map_err(|e| JsValue::from_str(&format!("{}", e)))
+    }
+
+    /// Get the serialized bytes for a specific note by ID
+    /// Returns a Uint8Array containing the automerge bytes
+    pub fn get_bytes(&mut self, id: &str) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .get_bytes(id)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
+    }
+
+    /// Add a note from serialized bytes
+    /// Returns a JsValue containing the loaded note (id and content)
+    pub fn add(&mut self, data: &[u8]) -> Result<JsValue, JsValue> {
+        let note = self
+            .inner
+            .add(data)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        serde_wasm_bindgen::to_value(&note).map_err(|e| JsValue::from_str(&format!("{}", e)))
+    }
+
+    /// Delete a note by ID
+    pub fn delete(&mut self, id: &str) -> Result<(), JsValue> {
+        self.inner
+            .delete(id)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

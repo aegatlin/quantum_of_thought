@@ -112,7 +112,7 @@ impl Notes {
         Ok(note)
     }
 
-    pub fn to_bytes(&mut self, id: &str) -> Result<Vec<u8>, NoteError> {
+    pub fn get_bytes(&mut self, id: &str) -> Result<Vec<u8>, NoteError> {
         match self.note_crdts.get_mut(id) {
             Some(note_crdt) => Ok(note_crdt.to_bytes()),
             None => Err(NoteError::NotFound(format!(
@@ -122,7 +122,7 @@ impl Notes {
         }
     }
 
-    pub fn from_bytes(&mut self, data: &[u8]) -> Result<Note, NoteError> {
+    pub fn add(&mut self, data: &[u8]) -> Result<Note, NoteError> {
         let note_crdt = NoteCrdt::from_bytes(data)?;
         let note: Note = (&note_crdt).try_into()?;
         Ok(note)
