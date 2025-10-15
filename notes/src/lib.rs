@@ -152,6 +152,16 @@ impl Notes {
 
         Ok(notes)
     }
+
+    pub fn delete(&mut self, id: &str) -> Result<(), NoteError> {
+        match self.note_crdts.remove(id) {
+            Some(_) => Ok(()),
+            None => Err(NoteError::NotFound(format!(
+                "note not found with id: {}",
+                id
+            ))),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -228,5 +238,34 @@ mod tests {
 
         assert_eq!(list[2].id, note3.id);
         assert_eq!(list[2].content, "Third note");
+    }
+
+    #[test]
+    fn test_notes_delete() {
+        let mut notes = Notes::new();
+
+        // Create a note
+        let note = notes.create("Test note").unwrap();
+        let note_id = note.id.clone();
+
+        // Verify it exists
+        assert!(notes.get(&note_id).is_ok());
+        assert_eq!(notes.list().unwrap().len(), 1);
+
+        // Delete it
+        let result = notes.delete(&note_id);
+        assert!(result.is_ok());
+
+        // Verify it's gone
+        assert!(notes.get(&note_id).is_err());
+        assert_eq!(notes.list().unwrap().len(), 0);
+
+        // Deleting again should return error
+        let result = notes.delete(&note_id);
+        assert!(result.is_err());
+        match result {
+            Err(NoteError::NotFound(_)) => (),
+            _ => panic!("Expected NotFound error"),
+        }
     }
 }
