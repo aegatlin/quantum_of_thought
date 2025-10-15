@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { NoteStore } from "./NoteStore";
 import { useNoteStore } from "./useNoteStore";
+import { Button } from "./components/ui/button";
+import { Card, CardContent } from "./components/ui/card";
+import { NoteCard } from "./components/NoteCard";
 
 function App() {
   const [store, setStore] = useState<NoteStore | null>(null);
@@ -33,29 +36,25 @@ function NotesApp({ store }: { store: NoteStore }) {
       <div className="max-w-2xl mx-auto">
         <h1 className="text-4xl font-bold mb-8">Quantum of Thought</h1>
 
-        <button
-          onClick={() => noteStore.create("New note!")}
-          className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
+        <Button onClick={() => noteStore.create("New note!")} className="mb-6">
           Add Note
-        </button>
+        </Button>
 
-        <ul className="space-y-2">
-          {noteStore.notes.map((note) => (
-            <li
-              key={note.id}
-              className="p-4 border rounded flex justify-between items-center"
-            >
-              <span>{note.content}</span>
-              <button
-                onClick={() => noteStore.delete(note.id)}
-                className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-              >
-                Delete
-              </button>
-            </li>
-          ))}
-        </ul>
+        {noteStore.notes.length === 0 ? (
+          <Card>
+            <CardContent className="flex items-center justify-center p-12">
+              <p className="text-muted-foreground">
+                No notes yet. Create your first note!
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {noteStore.notes.map((note) => (
+              <NoteCard key={note.id} note={note} onDelete={noteStore.delete} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
