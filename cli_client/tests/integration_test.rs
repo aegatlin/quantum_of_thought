@@ -2,12 +2,13 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 
 #[test]
-fn test_no_args_shows_usage() {
+fn test_no_args_shows_help() {
     Command::cargo_bin("qot")
         .unwrap()
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("Usage"));
+        .success()
+        .stdout(predicate::str::contains("Usage"))
+        .stdout(predicate::str::contains("EXAMPLES"));
 }
 
 #[test]

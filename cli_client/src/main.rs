@@ -1,7 +1,7 @@
 mod service;
 mod storage;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use service::NoteService;
 
 #[derive(Parser)]
@@ -65,9 +65,9 @@ fn main() {
         None => {
             // No subcommand - treat as implicit note creation
             if cli.content.is_empty() {
-                eprintln!("Usage: qot <content> or qot <COMMAND>");
-                eprintln!("Run 'qot --help' for more information");
-                std::process::exit(1);
+                // Show help when no arguments provided
+                Cli::command().print_help().unwrap();
+                std::process::exit(0);
             }
             let note_content = cli.content.join(" ");
             create_note(&mut note_service, &note_content);
