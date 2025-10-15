@@ -59,7 +59,7 @@ fn test_delete_with_no_index_shows_usage() {
         .arg("delete")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Usage: qot delete <index>"));
+        .stderr(predicate::str::contains("Usage: qot delete <INDEX>"));
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn test_delete_with_invalid_index() {
         .args(&["delete", "abc"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("index must be a number"));
+        .stderr(predicate::str::contains("invalid digit found in string"));
 }
 
 #[test]
