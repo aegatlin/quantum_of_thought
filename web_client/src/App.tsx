@@ -1,35 +1,19 @@
-import { useEffect, useState } from "react";
-import { NoteStore } from "./NoteStore";
+import { NoteStoreProvider } from "./NoteStoreContext";
 import { useNoteStore } from "./useNoteStore";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { NoteCard } from "./components/NoteCard";
 
 function App() {
-  const [store, setStore] = useState<NoteStore | null>(null);
-
-  useEffect(() => {
-    NoteStore.create().then(setStore);
-  }, []);
-
-  if (!store) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold tracking-tight">
-            Quantum of Thought
-          </h1>
-          <p className="mt-4 text-muted-foreground">Initializing...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return <NotesApp store={store} />;
+  return (
+    <NoteStoreProvider>
+      <NotesApp />
+    </NoteStoreProvider>
+  );
 }
 
-function NotesApp({ store }: { store: NoteStore }) {
-  const noteStore = useNoteStore(store);
+function NotesApp() {
+  const noteStore = useNoteStore();
 
   return (
     <div className="min-h-screen bg-background p-8">

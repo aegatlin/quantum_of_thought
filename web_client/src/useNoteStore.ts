@@ -1,11 +1,10 @@
-import { useSyncExternalStore } from 'react';
-import type { NoteStore } from './NoteStore';
+import { useSyncExternalStore } from "react";
+import { useNoteStoreContext } from "./NoteStoreContext";
 
-export function useNoteStore(store: NoteStore) {
-  const notes = useSyncExternalStore(
-    store.subscribe,
-    store.getSnapshot
-  );
+export function useNoteStore() {
+  const store = useNoteStoreContext();
+
+  const notes = useSyncExternalStore(store.subscribe, store.getSnapshot);
 
   return {
     notes,
