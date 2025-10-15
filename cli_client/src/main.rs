@@ -37,13 +37,37 @@ fn main() {
                 if notes.is_empty() {
                     println!("No notes yet. Create one with: qot get milk");
                 } else {
-                    for note in notes {
-                        println!("{}", note.content);
+                    for (i, note) in notes.iter().enumerate() {
+                        println!("{}. {}", i + 1, note.content);
                     }
                 }
             }
             Err(e) => {
                 eprintln!("Error listing notes: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else if first_arg == "delete" {
+        if cli.args.len() < 2 {
+            eprintln!("Usage: qot delete <index>");
+            std::process::exit(1);
+        }
+
+        let index_str = &cli.args[1];
+        let index: usize = match index_str.parse() {
+            Ok(i) => i,
+            Err(_) => {
+                eprintln!("Error: index must be a number");
+                std::process::exit(1);
+            }
+        };
+
+        match note_service.delete_by_index(index) {
+            Ok(content) => {
+                println!("Deleted: {}", content);
+            }
+            Err(e) => {
+                eprintln!("Error deleting note: {}", e);
                 std::process::exit(1);
             }
         }

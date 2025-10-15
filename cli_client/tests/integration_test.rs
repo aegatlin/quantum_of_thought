@@ -51,3 +51,33 @@ fn test_create_note_with_special_characters() {
         .success()
         .stdout(predicate::str::contains("buy eggs & milk"));
 }
+
+#[test]
+fn test_delete_with_no_index_shows_usage() {
+    Command::cargo_bin("qot")
+        .unwrap()
+        .arg("delete")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Usage: qot delete <index>"));
+}
+
+#[test]
+fn test_delete_with_invalid_index() {
+    Command::cargo_bin("qot")
+        .unwrap()
+        .args(&["delete", "abc"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("index must be a number"));
+}
+
+#[test]
+fn test_list_shows_numbered_indices() {
+    Command::cargo_bin("qot")
+        .unwrap()
+        .arg("list")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_match(r"\d+\. .+").unwrap());
+}

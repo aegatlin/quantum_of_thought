@@ -59,6 +59,28 @@ impl NoteService {
 
         Ok(note_list)
     }
+
+    pub fn delete_by_index(&mut self, index: usize) -> Result<String, String> {
+        // Get current sorted list
+        let notes = self.list()?;
+
+        // Check if index is valid (1-based)
+        if index == 0 || index > notes.len() {
+            return Err(format!("Index {} out of range (1-{})", index, notes.len()));
+        }
+
+        // Get the note at the given index (convert to 0-based)
+        let note = &notes[index - 1];
+        let note_id = note.id.clone();
+        let note_content = note.content.clone();
+
+        // Delete from storage
+        self.storage
+            .delete(&note_id)
+            .map_err(|e| format!("{}", e))?;
+
+        Ok(note_content)
+    }
 }
 
 #[cfg(test)]
@@ -107,5 +129,63 @@ mod tests {
 
         assert_eq!(notes[2].id, note3.id);
         assert_eq!(notes[2].content, "Third note");
+    }
+
+    #[test]
+    fn test_delete_by_index() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = FileSystemStorage::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let mut service = NoteService {
+            notes: Notes::new(),
+            storage,
+        };
+
+        // Create three notes
+        service.create("First note").unwrap();
+        sleep(Duration::from_millis(10));
+        service.create("Second note").unwrap();
+        sleep(Duration::from_millis(10));
+        service.create("Third note").unwrap();
+
+        // Verify we have 3 notes
+        assert_eq!(service.list().unwrap().len(), 3);
+
+        // Delete the second note (index 2)
+        let deleted_content = service.delete_by_index(2).unwrap();
+        assert_eq!(deleted_content, "Second note");
+
+        // Verify we now have 2 notes
+        let notes = service.list().unwrap();
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0].content, "First note");
+        assert_eq!(notes[1].content, "Third note");
+    }
+
+    #[test]
+    fn test_delete_by_index_out_of_range() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = FileSystemStorage::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let mut service = NoteService {
+            notes: Notes::new(),
+            storage,
+        };
+
+        // Create one note
+        service.create("Only note").unwrap();
+
+        // Try to delete index 0 (invalid)
+        let result = service.delete_by_index(0);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("out of range"));
+
+        // Try to delete index 2 (out of range)
+        let result = service.delete_by_index(2);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("out of range"));
+
+        // Verify note is still there
+        assert_eq!(service.list().unwrap().len(), 1);
     }
 }
