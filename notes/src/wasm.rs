@@ -1,4 +1,4 @@
-use crate::{Note, Notes};
+use crate::Notes;
 use wasm_bindgen::prelude::*;
 
 /// WASM wrapper around the Notes library
@@ -31,9 +31,10 @@ impl WasmNotes {
     /// List all notes
     /// Returns a JsValue containing an array of notes
     pub fn list(&self) -> Result<JsValue, JsValue> {
-        // For now, return an empty array since we don't have persistence in WASM yet
-        // In the future, this would iterate over stored notes
-        let notes: Vec<Note> = Vec::new();
+        let notes = self
+            .inner
+            .list()
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         serde_wasm_bindgen::to_value(&notes).map_err(|e| JsValue::from_str(&format!("{}", e)))
     }

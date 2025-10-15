@@ -137,6 +137,19 @@ impl Notes {
         let note: Note = (&note_crdt).try_into()?;
         Ok(note)
     }
+
+    pub fn list(&self) -> Result<Vec<Note>, NoteError> {
+        let mut notes: Vec<Note> = self
+            .note_crdts
+            .values()
+            .map(|note_crdt| note_crdt.try_into())
+            .collect::<Result<Vec<Note>, NoteError>>()?;
+
+        // Sort by ID (UUIDv7 is chronologically sortable)
+        notes.sort_by(|a, b| a.id.cmp(&b.id));
+
+        Ok(notes)
+    }
 }
 
 #[cfg(test)]
@@ -185,5 +198,33 @@ mod tests {
 
         let note = notes.get(&note_id);
         assert!(note.is_ok_and(|n| n.content == expected_content))
+    }
+
+    #[test]
+    fn test_notes_list() {
+        let mut notes = Notes::new();
+
+        // List should be empty initially
+        let empty_list = notes.list().unwrap();
+        assert_eq!(empty_list.len(), 0);
+
+        // Create three notes
+        let note1 = notes.create("First note").unwrap();
+        let note2 = notes.create("Second note").unwrap();
+        let note3 = notes.create("Third note").unwrap();
+
+        // List should contain all three notes
+        let list = notes.list().unwrap();
+        assert_eq!(list.len(), 3);
+
+        // Notes should be sorted by ID (chronologically via UUIDv7)
+        assert_eq!(list[0].id, note1.id);
+        assert_eq!(list[0].content, "First note");
+
+        assert_eq!(list[1].id, note2.id);
+        assert_eq!(list[1].content, "Second note");
+
+        assert_eq!(list[2].id, note3.id);
+        assert_eq!(list[2].content, "Third note");
     }
 }
