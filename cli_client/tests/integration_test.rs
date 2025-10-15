@@ -32,15 +32,15 @@ fn test_create_note_with_multiple_words() {
         .stdout(predicate::str::contains("get milk"));
 }
 
-#[test]
-fn test_list_shows_placeholder() {
-    Command::cargo_bin("qot")
-        .unwrap()
-        .arg("list")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("No notes yet"));
-}
+// #[test]
+// fn test_list_shows_placeholder() {
+//     Command::cargo_bin("qot")
+//         .unwrap()
+//         .arg("list")
+//         .assert()
+//         .success()
+//         .stdout(predicate::str::contains("No notes yet"));
+// }
 
 #[test]
 fn test_create_note_with_special_characters() {

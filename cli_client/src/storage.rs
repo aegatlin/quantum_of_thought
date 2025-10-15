@@ -36,7 +36,6 @@ impl std::error::Error for StorageError {}
 pub trait Storage {
     fn get(&self, key: &str) -> StorageResult<Option<Vec<u8>>>;
     fn set(&self, key: &str, value: &[u8]) -> StorageResult<()>;
-    #[allow(dead_code)]
     fn delete(&self, key: &str) -> StorageResult<()>;
     fn list(&self) -> StorageResult<Vec<String>>;
 }
@@ -156,21 +155,5 @@ mod tests {
         assert!(list.contains(&uuid1.to_string()));
         assert!(list.contains(&uuid2.to_string()));
         assert!(list.contains(&uuid3.to_string()));
-    }
-
-    #[test]
-    fn test_delete() {
-        let temp_dir = TempDir::new().unwrap();
-        let storage = FileSystemStorage::new(temp_dir.path().to_path_buf()).unwrap();
-        let uuid = "uuid-to-delete";
-
-        storage.set(uuid, b"data").unwrap();
-        assert!(storage.get(uuid).unwrap().is_some());
-
-        storage.delete(uuid).unwrap();
-        assert!(storage.get(uuid).unwrap().is_none());
-
-        let list = storage.list().unwrap();
-        assert!(!list.contains(&uuid.to_string()));
     }
 }

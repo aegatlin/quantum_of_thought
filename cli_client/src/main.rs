@@ -1,9 +1,8 @@
+mod service;
 mod storage;
 
 use clap::Parser;
-use directories::ProjectDirs;
-use notes::{Note, Notes};
-use storage::{FileSystemStorage, Storage};
+use service::NoteService;
 
 #[derive(Parser)]
 #[command(name = "qot")]
@@ -61,61 +60,5 @@ fn main() {
                 std::process::exit(1);
             }
         }
-    }
-}
-
-struct NoteService {
-    notes: Notes,
-    storage: FileSystemStorage,
-}
-
-impl NoteService {
-    fn new() -> Result<Self, String> {
-        // Determine storage path using ProjectDirs
-        let proj_dirs =
-            ProjectDirs::from("", "", "qot").ok_or("Failed to determine storage directory")?;
-        let base_path = proj_dirs.data_dir().to_path_buf();
-
-        let storage = FileSystemStorage::new(base_path).map_err(|e| format!("{}", e))?;
-
-        Ok(Self {
-            notes: Notes::new(),
-            storage,
-        })
-    }
-
-    fn create(&mut self, content: &str) -> Result<Note, String> {
-        // Create note in memory
-        let note = self.notes.create(content).map_err(|e| format!("{:?}", e))?;
-
-        // Persist to storage
-        let bytes = self
-            .notes
-            .to_bytes(&note.id)
-            .map_err(|e| format!("{:?}", e))?;
-
-        self.storage
-            .set(&note.id, &bytes)
-            .map_err(|e| format!("{}", e))?;
-
-        Ok(note)
-    }
-
-    fn list(&mut self) -> Result<Vec<Note>, String> {
-        let uuids = self.storage.list().map_err(|e| format!("{}", e))?;
-
-        let mut note_list = Vec::new();
-        for uuid in uuids {
-            if let Some(bytes) = self.storage.get(&uuid).map_err(|e| format!("{}", e))? {
-                let note = self
-                    .notes
-                    .from_bytes(&bytes)
-                    .map_err(|e| format!("{:?}", e))?;
-
-                note_list.push(note);
-            }
-        }
-
-        Ok(note_list)
     }
 }
