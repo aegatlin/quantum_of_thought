@@ -1,4 +1,4 @@
-import init, { WasmNotes } from "notes";
+import init, { WasmNotes } from "crdt_notes";
 
 export interface Note {
   id: string;
