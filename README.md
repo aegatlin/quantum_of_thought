@@ -5,11 +5,9 @@ A note capture tool.
 ## Testing
 
 ```sh
-cd notes && cargo test
+cd crdt_notes && cargo test
 
-cd notes && wasm-pack test --node --features wasm
+cd client_cli && cargo test
 
-cd cli_client && cargo test
-
-cd web_client && npm run test:e2e
+cd client_web && npm run test:e2e
 ```
