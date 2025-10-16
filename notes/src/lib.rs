@@ -52,9 +52,10 @@ impl Notes {
 
     /// Adds a new `Note` from bytes. These bytes likely come from a persistence
     /// layer.
-    pub fn add(&self, data: &[u8]) -> Result<Note, NoteError> {
+    pub fn add(&mut self, data: &[u8]) -> Result<Note, NoteError> {
         let note_crdt = NoteCrdt::from_bytes(data)?;
         let note: Note = (&note_crdt).try_into()?;
+        self.note_crdts.insert(note.id.clone(), note_crdt);
         Ok(note)
     }
 
@@ -198,5 +199,32 @@ mod tests {
             Err(NoteError::NotFound(_)) => (),
             _ => panic!("Expected NotFound error"),
         }
+    }
+
+    #[test]
+    fn test_notes_add() {
+        let mut notes = Notes::new();
+
+        // Create a note and get its bytes
+        let original_note = notes.create("Test content").unwrap();
+        let note_bytes = notes.get_bytes(&original_note.id).unwrap();
+
+        // Create a new Notes instance and add the bytes
+        let mut notes2 = Notes::new();
+        let added_note = notes2.add(&note_bytes).unwrap();
+
+        // Verify the note was added and has correct content
+        assert_eq!(added_note.id, original_note.id);
+        assert_eq!(added_note.content, "Test content");
+
+        // Verify we can retrieve it by ID
+        let retrieved = notes2.get(&added_note.id).unwrap();
+        assert_eq!(retrieved.id, added_note.id);
+        assert_eq!(retrieved.content, "Test content");
+
+        // Verify it appears in the list
+        let list = notes2.list().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, added_note.id);
     }
 }
