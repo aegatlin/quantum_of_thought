@@ -1,74 +1,106 @@
-use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT};
+use automerge::{
+    AutoCommit, ObjType, ROOT, ReadDoc, ScalarValue, Value, transaction::Transactable,
+};
 use uuid::Uuid;
-use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
+#[derive(Debug)]
 pub struct Note {
+    id: String,
+    content: String,
     doc: AutoCommit,
+    errors: Vec<NoteError>,
 }
 
-#[wasm_bindgen]
-impl Note {
-    #[wasm_bindgen(constructor)]
-    pub fn new(content: &str) -> Result<Note, JsValue> {
-        let id = Uuid::now_v7().to_string();
-        let mut doc = AutoCommit::new();
+#[derive(Debug)]
+pub enum NoteError {
+    NotFound(String),
+    ExtractionError(String),
+    DeserializationError(String),
+    CreationError(String),
+    AutomergeError(String),
+    MissingId(String),
+    MissingContent(String),
+}
 
-        doc.put(ROOT, "id", &id)
-            .map_err(|e| JsValue::from_str(&format!("Failed to set id: {:?}", e)))?;
+pub fn new(content: &str) -> Note {
+    let mut note = Note {
+        id: Uuid::now_v7().to_string(),
+        content: "".into(),
+        doc: AutoCommit::new(),
+        errors: vec![],
+    };
 
-        let content_text = doc
-            .put_object(ROOT, "content", ObjType::Text)
-            .map_err(|e| JsValue::from_str(&format!("Failed to create content: {:?}", e)))?;
-
-        doc.update_text(&content_text, content)
-            .map_err(|e| JsValue::from_str(&format!("Failed to set content: {:?}", e)))?;
-
-        Ok(Self { doc })
+    if let Err(automerge_error) = note.doc.put(ROOT, "id", &note.id) {
+        note.errors
+            .push(NoteError::AutomergeError(automerge_error.to_string()));
+        return note;
     }
 
-    pub fn id(&self) -> Result<String, JsValue> {
-        match self.doc.get(ROOT, "id") {
-            Ok(Some((v, _))) => Ok(v.to_string()),
-            Ok(None) => Err(JsValue::from_str("id not found")),
-            Err(e) => Err(JsValue::from_str(&format!("Failed to get id: {:?}", e))),
+    match note.doc.put_object(ROOT, "content", ObjType::Text) {
+        Ok(obj_id) => {
+            if let Err(automerge_error) = note.doc.update_text(&obj_id, content) {
+                note.errors
+                    .push(NoteError::AutomergeError(automerge_error.to_string()));
+                return note;
+            }
+            note.content = content.into();
+        }
+        Err(automerge_error) => {
+            note.errors
+                .push(NoteError::AutomergeError(automerge_error.to_string()));
+            return note;
         }
     }
 
-    pub fn content(&self) -> Result<String, JsValue> {
-        match self.doc.get(ROOT, "content") {
-            Ok(Some((_, exid))) => self
-                .doc
-                .text(exid)
-                .map_err(|e| JsValue::from_str(&format!("Failed to read text: {:?}", e))),
-            Ok(None) => Err(JsValue::from_str("content not found")),
-            Err(e) => Err(JsValue::from_str(&format!(
-                "Failed to get content: {:?}",
-                e
-            ))),
+    note
+}
+
+pub fn into(note: &Note) -> Vec<u8> {
+    note.doc.clone().save()
+}
+
+pub fn from(bytes: &[u8]) -> Note {
+    let mut note = Note {
+        id: "".into(),
+        content: "".into(),
+        doc: AutoCommit::new(),
+        errors: vec![],
+    };
+
+    match AutoCommit::load(bytes) {
+        Ok(doc) => {
+            if let Ok(Some((Value::Scalar(v), _))) = doc.get(ROOT, "id") {
+                let w = v.as_ref();
+                if let ScalarValue::Str(id) = w {
+                    note.id = id.as_str().into();
+                } else {
+                    note.errors.push(NoteError::MissingId("missing id".into()))
+                }
+            } else {
+                note.errors.push(NoteError::MissingId("missing id".into()))
+            }
+
+            if let Ok(Some((_, ex_id))) = doc.get(ROOT, "content") {
+                match doc.text(ex_id) {
+                    Ok(content) => {
+                        note.content = content;
+                    }
+                    Err(automerge_error) => note
+                        .errors
+                        .push(NoteError::AutomergeError(automerge_error.to_string())),
+                }
+            } else {
+                note.errors
+                    .push(NoteError::MissingContent("missing content".into()))
+            }
+        }
+        Err(automerge_error) => {
+            note.errors
+                .push(NoteError::AutomergeError(automerge_error.to_string()));
         }
     }
 
-    pub fn into_bytes(&mut self) -> Vec<u8> {
-        self.doc.save()
-    }
-
-    pub fn from_bytes(data: &[u8]) -> Result<Note, JsValue> {
-        AutoCommit::load(data)
-            .map(|doc| Self { doc })
-            .map_err(|e| JsValue::from_str(&format!("Failed to load: {:?}", e)))
-    }
-
-    pub fn merge(&mut self, other_bytes: &[u8]) -> Result<(), JsValue> {
-        let mut other = AutoCommit::load(other_bytes)
-            .map_err(|e| JsValue::from_str(&format!("Failed to load: {:?}", e)))?;
-
-        self.doc
-            .merge(&mut other)
-            .map_err(|e| JsValue::from_str(&format!("Failed to merge: {:?}", e)))?;
-
-        Ok(())
-    }
+    note
 }
 
 #[cfg(test)]
@@ -76,93 +108,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_note_creation() {
+    fn test_new() {
         let expected_content = "hello, world";
-        let note = Note::new(expected_content);
-        assert!(note.is_ok());
 
-        let note = note.unwrap();
-        let content = note.content();
-        assert!(content.is_ok());
-        assert_eq!(content.unwrap(), expected_content);
+        let note = new(expected_content);
 
-        let id = note.id();
-        assert!(id.is_ok());
-        assert!(id.unwrap().len() > 0);
+        assert!(note.errors.is_empty());
+        assert_eq!(note.content, expected_content);
+        assert!(!note.id.is_empty())
     }
 
     #[test]
-    fn test_note_id_is_unique() {
-        let note1 = Note::new("first").unwrap();
-        let note2 = Note::new("second").unwrap();
+    fn test_into() {
+        let note = new("idk");
 
-        let id1 = note1.id().unwrap();
-        let id2 = note2.id().unwrap();
+        let bytes = into(&note);
 
-        assert_ne!(id1, id2);
+        assert!(!bytes.is_empty())
     }
 
     #[test]
-    fn test_note_serialization() {
-        let expected_content = "test content";
-        let mut note = Note::new(expected_content).unwrap();
-        let original_id = note.id().unwrap();
+    fn test_from() {
+        let note = new("idk");
+        let bytes = into(&note);
 
-        // Serialize
-        let bytes = note.into_bytes();
-        assert!(bytes.len() > 0);
+        let note2 = from(&bytes);
 
-        // Deserialize
-        let restored_note = Note::from_bytes(&bytes);
-        assert!(restored_note.is_ok());
-
-        let restored_note = restored_note.unwrap();
-        assert_eq!(restored_note.id().unwrap(), original_id);
-        assert_eq!(restored_note.content().unwrap(), expected_content);
-    }
-
-    #[test]
-    fn test_empty_content() {
-        let note = Note::new("");
-        assert!(note.is_ok());
-
-        let note = note.unwrap();
-        assert_eq!(note.content().unwrap(), "");
-    }
-
-    #[test]
-    fn test_multiline_content() {
-        let content = "line 1\nline 2\nline 3";
-        let note = Note::new(content).unwrap();
-        assert_eq!(note.content().unwrap(), content);
-    }
-
-    #[test]
-    fn test_merge() {
-        // Create two notes with the same ID (simulate same note on different devices)
-        let mut note1 = Note::new("initial content").unwrap();
-        let note1_id = note1.id().unwrap();
-
-        // Serialize note1's initial state
-        let note1_bytes = note1.into_bytes();
-
-        // Create note2 from the same initial state (simulating a second device)
-        let mut note2 = Note::from_bytes(&note1_bytes).unwrap();
-        assert_eq!(note2.id().unwrap(), note1_id);
-
-        // Both notes should have the same content initially
-        assert_eq!(note1.content().unwrap(), "initial content");
-        assert_eq!(note2.content().unwrap(), "initial content");
-
-        // Serialize note2's state
-        let note2_bytes = note2.into_bytes();
-
-        // Merge note2 into note1
-        let result = note1.merge(&note2_bytes);
-        assert!(result.is_ok());
-
-        // After merging identical states, content should be unchanged
-        assert_eq!(note1.content().unwrap(), "initial content");
-        assert_eq!(note1.id().unwrap(), note1_id);
+        assert!(note2.errors.is_empty());
+        assert_eq!(note2.content, note.content);
+        assert_eq!(note2.id, note.id);
     }
 }

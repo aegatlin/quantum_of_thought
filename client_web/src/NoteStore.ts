@@ -1,4 +1,4 @@
-import init, { WasmNotes } from "crdt_notes";
+import { WasmNote } from "crdt_note";
 
 export interface Note {
   id: string;
@@ -6,19 +6,16 @@ export interface Note {
 }
 
 export class NoteStore {
-  private wasm: WasmNotes;
+  private notes: Map<string, WasmNote> = new Map();
   private listeners = new Set<() => void>();
   private cachedSnapshot: Note[] = [];
 
-  private constructor(wasm: WasmNotes) {
-    this.wasm = wasm;
+  private constructor() {
     this.updateSnapshot();
   }
 
   static async create(): Promise<NoteStore> {
-    await init();
-    const wasm = new WasmNotes();
-    return new NoteStore(wasm);
+    return new NoteStore();
   }
 
   subscribe = (listener: () => void): (() => void) => {
@@ -31,18 +28,25 @@ export class NoteStore {
   };
 
   create(content: string): Note {
-    const note = this.wasm.create(content);
+    const wasmNote = new WasmNote(content);
+    const id = wasmNote.id();
+    const noteContent = wasmNote.content();
+
+    this.notes.set(id, wasmNote);
     this.updateSnapshot();
     this.notifyListeners();
-    return note;
+
+    return { id, content: noteContent };
   }
 
   delete(id: string): boolean {
     try {
-      this.wasm.delete(id);
-      this.updateSnapshot();
-      this.notifyListeners();
-      return true;
+      const deleted = this.notes.delete(id);
+      if (deleted) {
+        this.updateSnapshot();
+        this.notifyListeners();
+      }
+      return deleted;
     } catch (error) {
       console.error(`Failed to delete note ${id}:`, error);
       return false;
@@ -50,7 +54,10 @@ export class NoteStore {
   }
 
   private updateSnapshot(): void {
-    this.cachedSnapshot = this.wasm.list();
+    this.cachedSnapshot = Array.from(this.notes.values()).map((wasmNote) => ({
+      id: wasmNote.id(),
+      content: wasmNote.content(),
+    }));
   }
 
   private notifyListeners(): void {
