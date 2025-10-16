@@ -1,79 +1,16 @@
-use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT};
 use std::collections::HashMap;
-use uuid::Uuid;
 
+use crate::note_crdt::NoteCrdt;
+
+mod note_crdt;
 #[cfg(feature = "wasm")]
 pub mod wasm;
-
-struct NoteCrdt {
-    doc: AutoCommit,
-}
 
 #[derive(Debug)]
 pub enum NoteError {
     NotFound(String),
     ExtractionError(String),
     DeserializationError(String),
-}
-
-impl NoteCrdt {
-    fn new(content: &str) -> Result<Self, NoteError> {
-        let id = Uuid::now_v7().to_string();
-        let mut doc = AutoCommit::new();
-
-        let _ = doc.put(ROOT, "id", &id);
-
-        let content_text = doc
-            .put_object(automerge::ROOT, "content", ObjType::Text)
-            .unwrap();
-
-        let _ = doc.update_text(&content_text, content);
-
-        Ok(Self { doc })
-    }
-
-    fn id(&self) -> Result<String, NoteError> {
-        match self.doc.get(ROOT, "id") {
-            Ok(res) => match res {
-                Some((v, _)) => Ok(v.to_string()),
-                None => Err(NoteError::ExtractionError(
-                    "problem extracting id".to_string(),
-                )),
-            },
-            Err(err) => Err(NoteError::ExtractionError(err.to_string())),
-        }
-    }
-
-    fn content(&self) -> Result<String, NoteError> {
-        match self.doc.get(ROOT, "content") {
-            Ok(res) => match res {
-                Some((_, exid)) => match self.doc.text(exid) {
-                    Ok(s) => Ok(s),
-                    Err(err) => Err(NoteError::ExtractionError(err.to_string())),
-                },
-                None => Err(NoteError::ExtractionError(
-                    "problem extracting content".to_string(),
-                )),
-            },
-            Err(err) => Err(NoteError::ExtractionError(err.to_string())),
-        }
-    }
-
-    fn to_bytes(&mut self) -> Vec<u8> {
-        self.doc.save()
-    }
-
-    /// &[u8] allegedly is the most friendly FFI input type. In JS it is a
-    /// Uint8Array. In Swift it is `Data`. In Kotlin it is ByteArray. In
-    /// Elixir/Erlang it is binary().
-    fn from_bytes(data: &[u8]) -> Result<Self, NoteError> {
-        match AutoCommit::load(data) {
-            Ok(doc) => Ok(Self { doc }),
-            Err(automerge_error) => {
-                Err(NoteError::DeserializationError(automerge_error.to_string()))
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +42,7 @@ impl Notes {
         }
     }
 
+    /// Creates a new `Note` from string content
     pub fn create(&mut self, content: &str) -> Result<Note, NoteError> {
         let note_crdt = NoteCrdt::new(content)?;
         let note: Note = (&note_crdt).try_into()?;
@@ -112,24 +50,15 @@ impl Notes {
         Ok(note)
     }
 
-    pub fn get_bytes(&mut self, id: &str) -> Result<Vec<u8>, NoteError> {
-        match self.note_crdts.get_mut(id) {
-            Some(note_crdt) => Ok(note_crdt.to_bytes()),
-            None => Err(NoteError::NotFound(format!(
-                "note not found with id: {}",
-                id
-            ))),
-        }
-    }
-
-    pub fn add(&mut self, data: &[u8]) -> Result<Note, NoteError> {
+    /// Adds a new `Note` from bytes. These bytes likely come from a persistence
+    /// layer.
+    pub fn add(&self, data: &[u8]) -> Result<Note, NoteError> {
         let note_crdt = NoteCrdt::from_bytes(data)?;
         let note: Note = (&note_crdt).try_into()?;
         Ok(note)
     }
 
-    // key-value store behaviours
-
+    /// Gets a `Note` by `id`
     pub fn get(&self, id: &str) -> Result<Note, NoteError> {
         match self.note_crdts.get(id) {
             Some(note_crdt) => note_crdt.try_into(),
@@ -140,6 +69,21 @@ impl Notes {
         }
     }
 
+    /// Gets the bytes representation of a `Note` by `id`.
+    pub fn get_bytes(&mut self, id: &str) -> Result<Vec<u8>, NoteError> {
+        match self.note_crdts.get_mut(id) {
+            Some(note_crdt) => Ok(note_crdt.to_bytes()),
+            None => Err(NoteError::NotFound(format!(
+                "note not found with id: {}",
+                id
+            ))),
+        }
+    }
+
+    /// Lists all notes in `Notes`.
+    ///
+    /// Internally the notes are stored as `NoteCrdt`s and so there is also a
+    /// mapping of each `NoteCrdt` into `Note` via `.try_into()`.
     pub fn list(&self) -> Result<Vec<Note>, NoteError> {
         let mut notes: Vec<Note> = self
             .note_crdts
@@ -153,6 +97,7 @@ impl Notes {
         Ok(notes)
     }
 
+    // Deletes a `Note` by `id` from `Notes`.
     pub fn delete(&mut self, id: &str) -> Result<(), NoteError> {
         match self.note_crdts.remove(id) {
             Some(_) => Ok(()),
@@ -167,20 +112,6 @@ impl Notes {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_note_crdt() {
-        let expected_content = "hello, world";
-        let result = NoteCrdt::new(expected_content);
-        assert!(result.is_ok());
-
-        let note_crdt = result.unwrap();
-        let content = note_crdt.content();
-        assert!(content.is_ok_and(|c| c == expected_content));
-
-        let id = note_crdt.id();
-        assert!(id.is_ok_and(|i| i.len() > 0))
-    }
 
     #[test]
     fn test_note() {

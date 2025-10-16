@@ -41,7 +41,7 @@ impl WasmNotes {
 
     /// Get a specific note by ID
     /// Returns a JsValue containing the note (id and content)
-    pub fn get(&mut self, id: &str) -> Result<JsValue, JsValue> {
+    pub fn get(&self, id: &str) -> Result<JsValue, JsValue> {
         let note = self
             .inner
             .get(id)
