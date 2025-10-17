@@ -2,7 +2,9 @@ use automerge::{
     AutoCommit, ObjType, ROOT, ReadDoc, ScalarValue, Value, transaction::Transactable,
 };
 use uuid::Uuid;
+use wasm_bindgen::prelude::*;
 
+#[wasm_bindgen]
 #[derive(Debug)]
 pub struct Note {
     id: String,
@@ -22,6 +24,7 @@ pub enum NoteError {
     MissingContent(String),
 }
 
+#[wasm_bindgen]
 pub fn new(content: &str) -> Note {
     let mut note = Note {
         id: Uuid::now_v7().to_string(),
