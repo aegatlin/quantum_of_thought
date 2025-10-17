@@ -1,14 +1,9 @@
-import { WasmNote } from "crdt_note";
-
-export interface Note {
-  id: string;
-  content: string;
-}
+import * as lib from "@/lib";
 
 export class NoteStore {
-  private notes: Map<string, WasmNote> = new Map();
+  private notes: Map<string, lib.note.Note> = new Map();
   private listeners = new Set<() => void>();
-  private cachedSnapshot: Note[] = [];
+  private cachedSnapshot: lib.note.Note[] = [];
 
   private constructor() {
     this.updateSnapshot();
@@ -23,20 +18,16 @@ export class NoteStore {
     return () => this.listeners.delete(listener);
   };
 
-  getSnapshot = (): Note[] => {
+  getSnapshot = (): lib.note.Note[] => {
     return this.cachedSnapshot;
   };
 
-  create(content: string): Note {
-    const wasmNote = new WasmNote(content);
-    const id = wasmNote.id();
-    const noteContent = wasmNote.content();
-
-    this.notes.set(id, wasmNote);
+  create(content: string): lib.note.Note {
+    const note = lib.note.new_note(content);
+    this.notes.set(note.id, note);
     this.updateSnapshot();
     this.notifyListeners();
-
-    return { id, content: noteContent };
+    return note;
   }
 
   delete(id: string): boolean {
@@ -54,10 +45,7 @@ export class NoteStore {
   }
 
   private updateSnapshot(): void {
-    this.cachedSnapshot = Array.from(this.notes.values()).map((wasmNote) => ({
-      id: wasmNote.id(),
-      content: wasmNote.content(),
-    }));
+    this.cachedSnapshot = Array.from(this.notes.values());
   }
 
   private notifyListeners(): void {

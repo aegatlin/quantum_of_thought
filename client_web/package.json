@@ -17,7 +17,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "crdt_note": "file:../crdt_note/pkg",
-    "crdt_notes": "file:../crdt_notes/pkg",
     "lucide-react": "^0.545.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

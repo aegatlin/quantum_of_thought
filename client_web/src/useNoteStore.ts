@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { useNoteStoreContext } from "./NoteStoreContext";
+import { useNoteStoreContext } from "./useNoteStoreContext";
 
 export function useNoteStore() {
   const store = useNoteStoreContext();
