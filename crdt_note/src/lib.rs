@@ -16,13 +16,19 @@ impl Note {
         let mut doc = AutoCommit::new();
         let id = Uuid::now_v7().to_string();
 
-        doc.put(ROOT, "id", &id);
+        if let Err(_) = doc.put(ROOT, "id", &id) {
+            return Self { doc: doc };
+        }
 
         match doc.put_object(ROOT, "content", ObjType::Text) {
             Ok(ex_id) => {
-                doc.update_text(&ex_id, content);
+                if let Err(_) = doc.update_text(&ex_id, content) {
+                    return Self { doc: doc };
+                };
             }
-            Err(_) => {}
+            Err(_) => {
+                return Self { doc: doc };
+            }
         }
 
         Note { doc: doc }
