@@ -1,10 +1,11 @@
+/// <reference types="vitest" />
+import react from "@vitejs/plugin-react";
 import path from "path";
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import wasm from "vite-plugin-wasm";
+import { defaultExclude } from "vitest/config";
 import topLevelAwait from "vite-plugin-top-level-await";
+import wasm from "vite-plugin-wasm";
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), wasm(), topLevelAwait()],
   resolve: {
@@ -17,5 +18,8 @@ export default defineConfig({
       // Allow serving files from the parent directory (for WASM package)
       allow: [".."],
     },
+  },
+  test: {
+    exclude: ["tests/e2e/**", ...defaultExclude],
   },
 });
