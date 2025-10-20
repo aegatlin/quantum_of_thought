@@ -1,9 +1,16 @@
 use crate::storage::{FileSystemStorage, Storage};
 use directories::ProjectDirs;
-use notes::{Note, Notes};
+use std::collections::HashMap;
+
+// Simple view struct for Note data
+#[derive(Clone, Debug)]
+pub struct Note {
+    pub id: String,
+    pub content: String,
+}
 
 pub struct NoteService {
-    notes: Notes,
+    notes: HashMap<String, crdt_note::Note>,
     storage: FileSystemStorage,
 }
 
@@ -17,26 +24,36 @@ impl NoteService {
         let storage = FileSystemStorage::new(base_path).map_err(|e| format!("{}", e))?;
 
         Ok(Self {
-            notes: Notes::new(),
+            notes: HashMap::new(),
             storage,
         })
     }
 
     pub fn create(&mut self, content: &str) -> Result<Note, String> {
-        // Create note in memory
-        let note = self.notes.create(content).map_err(|e| format!("{:?}", e))?;
+        // Create note using crdt_note
+        let crdt_note = crdt_note::Note::new(content);
+        let note_id = crdt_note.id();
+        let note_content = crdt_note.content();
+
+        // Validate the note was created successfully
+        if note_id.is_empty() {
+            return Err("Failed to create note".to_string());
+        }
 
         // Persist to storage
-        let bytes = self
-            .notes
-            .get_bytes(&note.id)
-            .map_err(|e| format!("{:?}", e))?;
-
+        let bytes = crdt_note::Note::into(&crdt_note);
         self.storage
-            .set(&note.id, &bytes)
+            .set(&note_id, &bytes)
             .map_err(|e| format!("{}", e))?;
 
-        Ok(note)
+        // Store in memory
+        let crdt_note_copy = crdt_note::Note::from(&bytes);
+        self.notes.insert(note_id.clone(), crdt_note_copy);
+
+        Ok(Note {
+            id: note_id,
+            content: note_content,
+        })
     }
 
     pub fn list(&mut self) -> Result<Vec<Note>, String> {
@@ -48,9 +65,18 @@ impl NoteService {
         let mut note_list = Vec::new();
         for uuid in uuids {
             if let Some(bytes) = self.storage.get(&uuid).map_err(|e| format!("{}", e))? {
-                let note = self.notes.add(&bytes).map_err(|e| format!("{:?}", e))?;
+                // Deserialize from storage
+                let crdt_note = crdt_note::Note::from(&bytes);
+                let note_id = crdt_note.id();
+                let note_content = crdt_note.content();
 
-                note_list.push(note);
+                // Store in memory cache
+                self.notes.insert(note_id.clone(), crdt_note);
+
+                note_list.push(Note {
+                    id: note_id,
+                    content: note_content,
+                });
             }
         }
 
@@ -92,7 +118,7 @@ mod tests {
         let storage = FileSystemStorage::new(temp_dir.path().to_path_buf()).unwrap();
 
         let mut service = NoteService {
-            notes: Notes::new(),
+            notes: HashMap::new(),
             storage,
         };
 
@@ -134,7 +160,7 @@ mod tests {
         let storage = FileSystemStorage::new(temp_dir.path().to_path_buf()).unwrap();
 
         let mut service = NoteService {
-            notes: Notes::new(),
+            notes: HashMap::new(),
             storage,
         };
 
@@ -165,7 +191,7 @@ mod tests {
         let storage = FileSystemStorage::new(temp_dir.path().to_path_buf()).unwrap();
 
         let mut service = NoteService {
-            notes: Notes::new(),
+            notes: HashMap::new(),
             storage,
         };
 

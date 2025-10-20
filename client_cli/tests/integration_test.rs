@@ -75,6 +75,20 @@ fn test_delete_with_invalid_index() {
 
 #[test]
 fn test_list_shows_numbered_indices() {
+    // First create a couple of notes
+    Command::cargo_bin("qot")
+        .unwrap()
+        .args(&["add", "first", "note"])
+        .assert()
+        .success();
+
+    Command::cargo_bin("qot")
+        .unwrap()
+        .args(&["add", "second", "note"])
+        .assert()
+        .success();
+
+    // Now list should show numbered indices
     Command::cargo_bin("qot")
         .unwrap()
         .arg("list")
