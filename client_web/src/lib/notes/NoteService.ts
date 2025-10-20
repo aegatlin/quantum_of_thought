@@ -5,19 +5,21 @@ import * as wasm from "crdt_note";
  *
  * Add listeners via the subscribe() function to receive updates.
  *
- * All functions are synchronous, returning appropriate data immediate. Any data
- * that requires asynchronous activity will notify listeners when they are
- * complete.
+ * All functions are synchronous. Any data that requires asynchronous activity
+ * will notify listeners when they are complete.
  *
  */
 export class NoteService {
   private storage: lib.storage.Storage;
+  private networks: lib.network.NetworkAdapter[];
 
   private wnotes: Map<string, wasm.Note> = new Map();
   private listeners = new Set<() => void>();
 
   constructor(opts = { storage: lib.storage.getStorage() }) {
     this.storage = opts.storage;
+    this.networks = [new lib.network.HttpAdapter()];
+
     this.getAllNotesFromStorage();
   }
 
@@ -28,6 +30,13 @@ export class NoteService {
 
   all(): lib.notes.Note[] {
     this.getAllNotesFromStorage();
+
+    this.networks.forEach((network) => {
+      network
+        .getAll()
+        .then((res) => console.log("network getAll response: ", res));
+    });
+
     return Array.from(this.wnotes.values()).map((wnote) => this.view(wnote));
   }
 
@@ -87,6 +96,12 @@ export class NoteService {
     // async delete from storage
     this.storage.delete(id).then(() => {
       this.notify();
+    });
+
+    this.networks.forEach((network) => {
+      network
+        .delete(id)
+        .then((res) => console.log("network delete response: ", res));
     });
 
     return isDeletedFromMemory;

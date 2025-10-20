@@ -26,7 +26,8 @@ defmodule Qot.MixProject do
     [
       {:phoenix, "~> 1.7.0"},
       {:bandit, "~> 1.0"},
-      {:jason, "~> 1.2"}
+      {:jason, "~> 1.2"},
+      {:cors_plug, "~> 3.0"}
     ]
   end
 end
