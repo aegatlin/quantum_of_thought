@@ -46,8 +46,18 @@ export class NoteService {
     this.wnotes.set(note.id, wnote);
 
     const wnoteData = wnote.into();
-    this.storage.set(note.id, wnoteData).then(() => {
-      // no-op
+    this.storage.set(note.id, wnoteData).then((bool) => {
+      if (bool) {
+        console.log("note stored");
+      } else {
+        console.log("note not stored");
+      }
+    });
+
+    this.networks.forEach((network) => {
+      network
+        .send(note.id, wnoteData)
+        .then((res) => console.log("network .send response: ", res));
     });
 
     return note;
