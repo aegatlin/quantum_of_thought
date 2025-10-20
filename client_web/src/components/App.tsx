@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useNoteStore } from "./useNoteStore";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
+import { Input } from "./ui/input";
 import { NoteCard } from "./NoteCard";
 import { NoteStoreProvider } from "./NoteStoreProvider";
 
@@ -14,15 +16,37 @@ function App() {
 
 function NotesApp() {
   const noteStore = useNoteStore();
+  const [noteText, setNoteText] = useState("");
+
+  const handleAddNote = () => {
+    if (noteText.trim()) {
+      noteStore.create(noteText);
+      setNoteText("");
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleAddNote();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background p-8">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-4xl font-bold mb-8">Quantum of Thought</h1>
 
-        <Button onClick={() => noteStore.create("New note!")} className="mb-6">
-          Add Note
-        </Button>
+        <div className="flex gap-2 mb-6">
+          <Input
+            type="text"
+            placeholder="Enter note text..."
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            onKeyPress={handleKeyPress}
+            className="flex-1"
+          />
+          <Button onClick={handleAddNote}>Add Note</Button>
+        </div>
 
         {noteStore.notes.length === 0 ? (
           <Card>
