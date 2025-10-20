@@ -39,7 +39,7 @@ async function setup() {
 }
 
 describe("NoteService", () => {
-  it("create: should create a note with content", async () => {
+  it("create", async () => {
     const { noteService } = await setup();
     const expected = "Test note content";
 
@@ -81,5 +81,21 @@ describe("NoteService", () => {
     expect(note).toBeDefined();
     expect(note.id).toBe(wnote.id());
     expect(note.content).toBe(wnote.content());
+  });
+
+  it("update", async () => {
+    const { storage, noteService, wnote, untilNotifyGte } = await setup();
+    await untilNotifyGte(1);
+
+    const note = noteService.update(wnote.id(), "new content")!;
+
+    expect(note).toBeDefined();
+    expect(note.id).toBe(note.id);
+    expect(note.content).toBe("new content");
+
+    const storedNoteBytes = await storage.get(wnote.id());
+    const storedNote = tt.fake.noteFrom(storedNoteBytes!);
+    expect(storedNote.id()).toBe(wnote.id());
+    expect(storedNote.content()).toBe("new content");
   });
 });
