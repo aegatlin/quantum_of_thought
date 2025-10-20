@@ -31,6 +31,10 @@ function NotesApp() {
     }
   };
 
+  const handleEditNote = (id: string, content: string) => {
+    noteStore.update(id, content);
+  };
+
   return (
     <div className="min-h-screen bg-background p-8">
       <div className="max-w-2xl mx-auto">
@@ -59,7 +63,12 @@ function NotesApp() {
         ) : (
           <div className="space-y-3">
             {noteStore.notes.map((note) => (
-              <NoteCard key={note.id} note={note} onDelete={noteStore.delete} />
+              <NoteCard
+                key={note.id}
+                note={note}
+                onDelete={noteStore.delete}
+                onEdit={handleEditNote}
+              />
             ))}
           </div>
         )}
