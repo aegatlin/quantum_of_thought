@@ -25,14 +25,17 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Create a new note
+    #[command(visible_alias = "a")]
     Add {
         /// The content of the note
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         content: Vec<String>,
     },
     /// List all notes with their indices
+    #[command(visible_alias = "l")]
     List,
     /// Delete a note by its index number
+    #[command(visible_alias = "d")]
     Delete {
         /// The index number shown in 'qot list' (e.g., 1, 2, 3)
         index: usize,
