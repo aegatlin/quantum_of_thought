@@ -1,4 +1,4 @@
-import * as lib from "../../../src/lib";
+import * as lib from "../../src/lib";
 
 export function getStorageInMemory(): lib.storage.Storage {
   const store = new Map<string, Uint8Array>();

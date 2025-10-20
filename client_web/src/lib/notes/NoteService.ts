@@ -11,11 +11,13 @@ import * as wasm from "crdt_note";
  *
  */
 export class NoteService {
+  private storage: lib.storage.Storage;
+
   private wnotes: Map<string, wasm.Note> = new Map();
-  private storage: lib.storage.Storage = lib.storage.getStorage();
   private listeners = new Set<() => void>();
 
-  constructor() {
+  constructor(opts = { storage: lib.storage.getStorage() }) {
+    this.storage = opts.storage;
     this.getAllNotesFromStorage();
   }
 
