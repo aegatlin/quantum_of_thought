@@ -4,7 +4,7 @@ defmodule QotWeb.NoteController do
 
   def upsert(conn, %{"id" => id, "data" => data}) do
     with {:ok, binary_data} <- Base.decode64(data),
-         {:ok, _note} <- Notes.put_note(id, binary_data) do
+         {:ok, _note} <- Notes.set(id, binary_data) do
       json(conn, %{id: id})
     else
       :error ->
@@ -20,7 +20,7 @@ defmodule QotWeb.NoteController do
   end
 
   def index(conn, _params) do
-    {:ok, notes} = Notes.list_notes()
+    {:ok, notes} = Notes.list()
 
     notes_json =
       Enum.map(notes, fn note ->
@@ -34,7 +34,7 @@ defmodule QotWeb.NoteController do
   end
 
   def delete(conn, %{"id" => id}) do
-    :ok = Notes.delete_note(id)
+    :ok = Notes.delete(id)
     json(conn, %{deleted: true})
   end
 end
