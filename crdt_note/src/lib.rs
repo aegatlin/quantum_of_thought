@@ -95,43 +95,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new_id_and_content() {
-        let note = Note::new("Hello, World!");
+    fn test_note() {
+        let expected_content = "expected content!";
+        let note = Note::new(expected_content);
 
-        // Test that id is not empty and is a valid UUID format
         let id = note.id();
-        assert!(!id.is_empty(), "Note id should not be empty");
-        assert!(
-            Uuid::parse_str(&id).is_ok(),
-            "Note id should be a valid UUID"
-        );
+        assert!(Uuid::try_parse(&id).is_ok());
 
-        // Test that content is set correctly
-        assert_eq!(note.content(), "Hello, World!");
+        let content = note.content();
+        assert_eq!(&content, expected_content);
     }
 
     #[test]
     fn test_into_and_from() {
-        let original = Note::new("Test content");
-        let original_id = original.id();
-        let original_content = original.content();
+        let expected_content = "expected content!";
+        let note1 = Note::new(expected_content);
 
-        // Serialize the note
-        let bytes = Note::into(&original);
+        let bytes = Note::into(&note1);
         assert!(!bytes.is_empty(), "Serialized bytes should not be empty");
 
-        // Deserialize the note
-        let restored = Note::from(&bytes);
-        assert_eq!(
-            restored.id(),
-            original_id,
-            "Restored note should have same id"
-        );
-        assert_eq!(
-            restored.content(),
-            original_content,
-            "Restored note should have same content"
-        );
+        let note2 = Note::from(&bytes);
+        assert_eq!(note2.id(), note1.id());
+        assert_eq!(note2.content(), note1.content());
+        assert_eq!(note2.content(), expected_content);
     }
 
     #[test]
