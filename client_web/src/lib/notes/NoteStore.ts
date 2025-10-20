@@ -46,6 +46,15 @@ export class NoteStore {
     return isDeleted;
   }
 
+  update(id: string, content: string): lib.notes.Note | null {
+    const newNote = this.noteService.update(id, content);
+    if (newNote) {
+      this.updateSnapshot();
+      this.notifyListeners();
+    }
+    return newNote;
+  }
+
   private updateSnapshot(): void {
     this.cachedSnapshot = this.noteService.all();
   }

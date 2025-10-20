@@ -15,5 +15,6 @@ export function useNoteStore() {
     notes,
     create: (content: string) => store.create(content),
     delete: (id: string) => store.delete(id),
+    update: (id: string, content: string) => store.update(id, content),
   };
 }
