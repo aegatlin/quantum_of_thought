@@ -1,9 +1,9 @@
-import { Card, CardContent } from "./ui/card";
+import * as lib from "@/lib";
 import { Button } from "./ui/button";
-import type { Note } from "../NoteStore";
+import { Card, CardContent } from "./ui/card";
 
 interface NoteCardProps {
-  note: Note;
+  note: lib.notes.Note;
   onDelete: (id: string) => void;
 }
 
