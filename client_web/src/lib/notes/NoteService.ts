@@ -1,20 +1,22 @@
 import * as lib from "@/lib";
 import * as wasm from "crdt_note";
 
-/*
-Add listeners via the subscribe() function to receive updates.
-
-All functions are synchronous, returning appropriate data immediate. Any data
-that requires asynchronous activity will notify listeners when they are
-complete.
-*/
+/**
+ *
+ * Add listeners via the subscribe() function to receive updates.
+ *
+ * All functions are synchronous, returning appropriate data immediate. Any data
+ * that requires asynchronous activity will notify listeners when they are
+ * complete.
+ *
+ */
 export class NoteService {
   private wnotes: Map<string, wasm.Note> = new Map();
   private storage: lib.storage.Storage = lib.storage.getStorage();
   private listeners = new Set<() => void>();
 
   constructor() {
-    this.update();
+    this.getAllNotesFromStorage();
   }
 
   subscribe(listener: () => void): () => void {
@@ -23,7 +25,7 @@ export class NoteService {
   }
 
   all(): lib.notes.Note[] {
-    this.update();
+    this.getAllNotesFromStorage();
     return Array.from(this.wnotes.values()).map((wnote) => this.view(wnote));
   }
 
@@ -60,6 +62,22 @@ export class NoteService {
     return null;
   }
 
+  update(id: string, content: string): lib.notes.Note | null {
+    if (this.wnotes.has(id)) {
+      const wnote = this.wnotes.get(id);
+      if (wnote) {
+        const newWnote = wnote.update(content);
+        // overwrites the old wnote, which should have the same id.
+        this.wnotes.set(newWnote.id(), newWnote);
+        this.storage.set(newWnote.id(), newWnote.into());
+
+        return this.view(newWnote);
+      }
+    }
+
+    return null;
+  }
+
   delete(id: string): boolean {
     // delete from memory
     const isDeletedFromMemory = this.wnotes.delete(id);
@@ -77,9 +95,10 @@ export class NoteService {
   }
 
   /**
-   * Update should only call `this.notify()` if an actual change occurs in `this.wnotes`
+   * This function should only call `this.notify()` if an actual change would
+   * occur in `this.wnotes`.
    */
-  private update() {
+  private getAllNotesFromStorage() {
     this.storage.list().then((ids) => {
       ids.forEach((id) => {
         if (!this.wnotes.has(id)) {
