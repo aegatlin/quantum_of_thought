@@ -64,15 +64,26 @@ impl Note {
         }
     }
 
+    pub fn update(&self, new_content: &str) -> Self {
+        let mut doc = self.doc.clone();
+
+        if let Ok(Some((_, ex_id))) = doc.get(ROOT, "content") {
+            match doc.update_text(&ex_id, new_content) {
+                Ok(_) => Self { doc: doc },
+                Err(_) => Note::empty(),
+            }
+        } else {
+            Note::empty()
+        }
+    }
+
     pub fn merge(&self, other: &Note) -> Self {
         let mut doc = self.doc.clone();
         let mut other_doc = other.doc.clone();
 
         match doc.merge(&mut other_doc) {
             Ok(_) => Self { doc: doc },
-            Err(_) => Self {
-                doc: AutoCommit::new(),
-            },
+            Err(_) => Note::empty(),
         }
     }
 
@@ -83,9 +94,13 @@ impl Note {
     pub fn from(bytes: &[u8]) -> Self {
         match AutoCommit::load(bytes) {
             Ok(doc) => Self { doc: doc },
-            Err(_) => Self {
-                doc: AutoCommit::new(),
-            },
+            Err(_) => Note::empty(),
+        }
+    }
+
+    fn empty() -> Self {
+        Self {
+            doc: AutoCommit::new(),
         }
     }
 }
@@ -95,7 +110,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_note() {
+    fn test_new_and_id_and_content() {
         let expected_content = "expected content!";
         let note = Note::new(expected_content);
 
@@ -121,22 +136,19 @@ mod tests {
     }
 
     #[test]
-    fn test_merge() {
-        let note1 = Note::new("First note");
-        let note2 = Note::new("Second note");
+    fn test_update_and_merge() {
+        let bytes = Note::into(&Note::new("one two three"));
+        let mut note1 = Note::from(&bytes);
+        let mut note2 = Note::from(&bytes);
+        note1 = note1.update(&format!("cool {}", note1.content()));
+        note2 = note2.update(&format!("{} wow", note2.content()));
 
-        // Merge note2 into note1
-        let merged = note1.merge(&note2);
+        assert_eq!(note1.id(), note2.id());
+        assert_eq!(note1.content(), "cool one two three");
+        assert_eq!(note2.content(), "one two three wow");
 
-        // The merged note should contain content from both notes
-        // In this case with independent documents, the result contains both
-        let content = merged.content();
-        assert!(
-            content.contains("First note") || content.contains("Second note"),
-            "Merged content should contain text from one of the notes"
-        );
-
-        // The merged note should have a valid id
-        assert!(!merged.id().is_empty());
+        let note3 = note1.merge(&note2);
+        assert_eq!(note3.id(), note1.id());
+        assert_eq!(note3.content(), "cool one two three wow");
     }
 }
