@@ -1,5 +1,9 @@
 # crdt_note
 
+WASM targets have a few gotchas. If you want to avoid those in general try your
+best to only pass primitives across the wasm boundary. Also pass by reference
+(non-mutable borrows in Rust).
+
 ## The Rust-to-Wasm-to-JS/TS pipeline
 
 ### With wasm-pack
