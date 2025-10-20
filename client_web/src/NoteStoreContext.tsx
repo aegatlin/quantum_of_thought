@@ -1,8 +1,8 @@
+import * as lib from "@/lib";
 import { createContext } from "react";
-import type { NoteStore } from "./NoteStore";
 
 export interface NoteStoreContextValue {
-  store: NoteStore;
+  store: lib.notes.NoteStore;
 }
 
 export const NoteStoreContext = createContext<NoteStoreContextValue | null>(

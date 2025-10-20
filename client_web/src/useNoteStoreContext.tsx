@@ -1,8 +1,8 @@
+import * as lib from "@/lib";
 import { useContext } from "react";
-import type { NoteStore } from "./NoteStore";
 import { NoteStoreContext } from "./NoteStoreContext";
 
-export function useNoteStoreContext(): NoteStore {
+export function useNoteStoreContext(): lib.notes.NoteStore {
   const context = useContext(NoteStoreContext);
   if (!context) {
     throw new Error(

@@ -1,1 +1,2 @@
-export * as note from "./note";
+export * as notes from "./notes";
+export * as storage from "./storage";

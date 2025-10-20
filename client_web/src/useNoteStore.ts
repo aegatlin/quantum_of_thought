@@ -4,7 +4,12 @@ import { useNoteStoreContext } from "./useNoteStoreContext";
 export function useNoteStore() {
   const store = useNoteStoreContext();
 
-  const notes = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const notes = useSyncExternalStore(
+    (listener) => store.subscribe(listener),
+    () => {
+      return store.getSnapshot();
+    },
+  );
 
   return {
     notes,
