@@ -1,26 +1,26 @@
 import * as lib from "@/lib";
-import * as wasm from "crdt_note";
 
 /**
  *
  * Add listeners via the subscribe() function to receive updates.
  *
- * All functions are synchronous. Any data that requires asynchronous activity
- * will notify listeners when they are complete.
+ * All public API functions are synchronous. Any data that requires asynchronous
+ * activity will notify listeners when they are complete.
  *
  */
 export class NoteService {
   private storage: lib.storage.Storage;
   private networks: lib.network.NetworkAdapter[];
 
-  private wnotes: Map<string, wasm.Note> = new Map();
+  private wnotes: Map<string, lib.notes.wasmNote.WasmNote> = new Map();
   private listeners = new Set<() => void>();
 
   constructor(opts = { storage: lib.storage.getStorage() }) {
     this.storage = opts.storage;
     this.networks = [new lib.network.HttpAdapter()];
 
-    this.getAllNotesFromStorage();
+    this.allFromStorage();
+    this.allFromNetworks();
   }
 
   subscribe(listener: () => void): () => void {
@@ -29,7 +29,7 @@ export class NoteService {
   }
 
   all(): lib.notes.Note[] {
-    this.getAllNotesFromStorage();
+    this.allFromStorage();
 
     this.networks.forEach((network) => {
       network
@@ -37,12 +37,14 @@ export class NoteService {
         .then((res) => console.log("network getAll response: ", res));
     });
 
-    return Array.from(this.wnotes.values()).map((wnote) => this.view(wnote));
+    return Array.from(this.wnotes.values()).map((wnote) =>
+      lib.notes.wasmNote.wnote_into_note(wnote),
+    );
   }
 
   create(content: string): lib.notes.Note {
-    const wnote = wasm.Note.new(content);
-    const note = this.view(wnote);
+    const wnote = lib.notes.wasmNote.wnote_from_content(content);
+    const note = lib.notes.wasmNote.wnote_into_note(wnote);
     this.wnotes.set(note.id, wnote);
 
     const wnoteData = wnote.into();
@@ -67,14 +69,14 @@ export class NoteService {
     // get from in-memory
     if (this.wnotes.has(id)) {
       const wnote = this.wnotes.get(id);
-      return wnote ? this.view(wnote) : null;
+      return wnote ? lib.notes.wasmNote.wnote_into_note(wnote) : null;
     }
 
     // async get from storage, then set in memory
     this.storage.get(id).then((wnoteData) => {
       if (wnoteData) {
-        const wnote = wasm.Note.from(wnoteData);
-        const note = this.view(wnote);
+        const wnote = lib.notes.wasmNote.wnote_from_bytes(wnoteData);
+        const note = lib.notes.wasmNote.wnote_into_note(wnote);
         this.wnotes.set(note.id, wnote);
         this.notify();
       }
@@ -92,7 +94,7 @@ export class NoteService {
         this.wnotes.set(newWnote.id(), newWnote);
         this.storage.set(newWnote.id(), newWnote.into());
 
-        return this.view(newWnote);
+        return lib.notes.wasmNote.wnote_into_note(newWnote);
       }
     }
 
@@ -125,14 +127,14 @@ export class NoteService {
    * This function should only call `this.notify()` if an actual change would
    * occur in `this.wnotes`.
    */
-  private getAllNotesFromStorage() {
+  private allFromStorage() {
     this.storage.list().then((ids) => {
       ids.forEach((id) => {
         if (!this.wnotes.has(id)) {
           this.storage.get(id).then((wnoteData) => {
             if (wnoteData) {
-              const wnote = wasm.Note.from(wnoteData);
-              const note = this.view(wnote);
+              const wnote = lib.notes.wasmNote.wnote_from_bytes(wnoteData);
+              const note = lib.notes.wasmNote.wnote_into_note(wnote);
               this.wnotes.set(note.id, wnote);
             }
 
@@ -143,10 +145,20 @@ export class NoteService {
     });
   }
 
-  private view(note: wasm.Note): lib.notes.Note {
-    return {
-      id: note.id(),
-      content: note.content(),
-    };
+  private async allFromNetworks() {
+    // parallel network requests
+    await Promise.all(
+      this.networks.map(async (network) => {
+        const notes = await network.getAll();
+
+        // sequential storage requests
+        for (const note of notes) {
+          await this.storage.set(note.id, note.data);
+        }
+      }),
+    );
+
+    // notify is _always_ called so care for infinite loops
+    this.notify();
   }
 }
