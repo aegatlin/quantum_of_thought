@@ -146,6 +146,8 @@ export class NoteService {
   }
 
   private async allFromNetworks() {
+    let hasChanges = false;
+
     // parallel network requests
     await Promise.all(
       this.networks.map(async (network) => {
@@ -153,12 +155,17 @@ export class NoteService {
 
         // sequential storage requests
         for (const note of notes) {
+          if (!this.wnotes.has(note.id)) {
+            hasChanges = true;
+          }
+
           await this.storage.set(note.id, note.data);
         }
       }),
     );
 
-    // notify is _always_ called so care for infinite loops
-    this.notify();
+    if (hasChanges) {
+      this.notify();
+    }
   }
 }
