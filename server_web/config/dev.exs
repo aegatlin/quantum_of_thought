@@ -1,6 +1,6 @@
 import Config
 
-config :qot, :cors_origins, ["http://localhost:5173"]
+config :qot, :cors_origins, ["http://localhost:5173", "http://localhost:5174"]
 
 config :qot, QotWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4000],

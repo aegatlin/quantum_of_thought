@@ -9,8 +9,10 @@ export class WebSocket implements Network {
   #listeners = new Set<(message: Message) => void>();
   #reconnectInterval = 5000;
   #reconnectTimer?: number;
+  #messageRef = 0;
+  #joined = false;
 
-  constructor(url: string = "ws://localhost:4000/socket") {
+  constructor(url: string = "ws://localhost:4000/socket/websocket") {
     this.#url = url;
     this.#connect();
   }
@@ -24,6 +26,9 @@ export class WebSocket implements Network {
         clearTimeout(this.#reconnectTimer);
         this.#reconnectTimer = undefined;
       }
+
+      // Join the "notes:lobby" channel
+      this.#joinChannel();
     };
 
     this.#ws.onmessage = (event) => {
@@ -37,6 +42,7 @@ export class WebSocket implements Network {
     this.#ws.onclose = () => {
       console.log("[websocket] Disconnected, reconnecting...");
       this.#ws = null;
+      this.#joined = false;
 
       // Schedule reconnect
       this.#reconnectTimer = setTimeout(() => {
@@ -45,15 +51,52 @@ export class WebSocket implements Network {
     };
   }
 
+  #joinChannel(): void {
+    const joinMessage = {
+      topic: "notes:lobby",
+      event: "phx_join",
+      payload: {},
+      ref: String(this.#messageRef++),
+    };
+
+    this.#ws?.send(JSON.stringify(joinMessage));
+  }
+
   send(message: Message): void {
-    if (!this.#ws || this.#ws.readyState !== globalThis.WebSocket.OPEN) {
-      console.warn("[websocket] Cannot send, not connected");
+    if (
+      !this.#ws ||
+      this.#ws.readyState !== globalThis.WebSocket.OPEN ||
+      !this.#joined
+    ) {
+      console.warn("[websocket] Cannot send, not connected or not joined");
       return;
     }
 
-    // Serialize message to JSON
-    const json = JSON.stringify(message);
-    this.#ws.send(json);
+    // Convert message to match server format (base64 encoded data)
+    let payload: any;
+
+    if (message.type === "note") {
+      const noteMsg = message as messages.Note;
+      payload = {
+        type: "note",
+        id: noteMsg.id,
+        data: btoa(String.fromCharCode(...noteMsg.bytes)),
+      };
+    } else if (message.type === "delete") {
+      payload = message;
+    } else {
+      payload = message;
+    }
+
+    // Wrap in Phoenix Channel protocol
+    const channelMessage = {
+      topic: "notes:lobby",
+      event: "message",
+      payload: payload,
+      ref: String(this.#messageRef++),
+    };
+
+    this.#ws.send(JSON.stringify(channelMessage));
   }
 
   subscribe(listener: (message: Message) => void): () => void {
@@ -77,27 +120,56 @@ export class WebSocket implements Network {
         jsonString = data;
       }
 
-      const parsed = JSON.parse(jsonString);
+      const channelMsg = JSON.parse(jsonString);
 
-      // Reconstruct Uint8Array fields if needed
-      let message: Message;
-
-      if (parsed.type === "note") {
-        message = messages.note(parsed.id, new Uint8Array(parsed.bytes));
-      } else if (parsed.type === "notes") {
-        message = messages.notes(
-          parsed.notes.map((n: { id: string; bytes: number[] }) => ({
-            id: n.id,
-            bytes: new Uint8Array(n.bytes),
-          })),
-        );
-      } else if (parsed.type === "delete") {
-        message = messages.delete_(parsed.id);
-      } else {
-        message = parsed;
+      // Handle Phoenix Channel events
+      if (
+        channelMsg.event === "phx_reply" &&
+        channelMsg.payload.status === "ok"
+      ) {
+        // Successfully joined channel
+        console.log("[websocket] Joined channel:", channelMsg.topic);
+        this.#joined = true;
+        return;
       }
 
-      this.#notifyListeners(message);
+      if (channelMsg.event === "message") {
+        // Extract our application message from the channel payload
+        const parsed = channelMsg.payload;
+
+        // Reconstruct Uint8Array fields if needed
+        let message: Message;
+
+        if (parsed.type === "note") {
+          // Phoenix sends base64 encoded data, need to decode
+          const binaryString = atob(parsed.data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          message = messages.note(parsed.id, bytes);
+        } else if (parsed.type === "notes") {
+          message = messages.notes(
+            parsed.notes.map((n: { id: string; data: string }) => {
+              const binaryString = atob(n.data);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              return {
+                id: n.id,
+                bytes: bytes,
+              };
+            }),
+          );
+        } else if (parsed.type === "delete") {
+          message = messages.delete_(parsed.id);
+        } else {
+          message = parsed;
+        }
+
+        this.#notifyListeners(message);
+      }
     } catch (err) {
       console.error("[websocket] message parse error:", err);
     }

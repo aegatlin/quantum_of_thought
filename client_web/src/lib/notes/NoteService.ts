@@ -17,12 +17,15 @@ export class NoteService {
 
   constructor(opts = { storage: lib.storage.getStorage() }) {
     this.#storage = opts.storage;
-    this.#networks = [new lib.notes.network.Http()];
+    this.#networks = [
+      new lib.notes.network.Http(),
+      new lib.notes.network.WebSocket(),
+    ];
 
     // Subscribe to incoming network messages
     this.#networks.forEach((network) => {
       network.subscribe((message) => {
-        this.#onNetworkMessage(message);
+        this.#handleNetworkMessage(message);
       });
     });
 
@@ -34,7 +37,7 @@ export class NoteService {
     return () => this.#listeners.delete(listener);
   }
 
-  #onNetworkMessage(message: lib.notes.network.messages.Message): void {
+  #handleNetworkMessage(message: lib.notes.network.messages.Message): void {
     switch (message.type) {
       case "notes":
         this.#syncNotesFromNetwork(message as lib.notes.network.messages.Notes);
