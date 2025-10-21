@@ -8,6 +8,7 @@ defmodule Qot.Application do
     storage_adapter.init()
 
     children = [
+      {Phoenix.PubSub, name: Qot.PubSub},
       QotWeb.Endpoint
     ]
 
