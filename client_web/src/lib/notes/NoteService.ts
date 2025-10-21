@@ -30,12 +30,7 @@ export class NoteService {
 
   all(): lib.notes.Note[] {
     this.allFromStorage();
-
-    this.networks.forEach((network) => {
-      network
-        .getAll()
-        .then((res) => console.log("network getAll response: ", res));
-    });
+    this.allFromNetworks();
 
     return Array.from(this.wnotes.values()).map((wnote) =>
       lib.notes.wasmNote.wnote_into_note(wnote),
@@ -88,6 +83,7 @@ export class NoteService {
   update(id: string, content: string): lib.notes.Note | null {
     if (this.wnotes.has(id)) {
       const wnote = this.wnotes.get(id);
+
       if (wnote) {
         const newWnote = wnote.update(content);
         // overwrites the old wnote, which should have the same id.
