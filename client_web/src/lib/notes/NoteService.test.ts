@@ -54,7 +54,7 @@ describe("NoteService", () => {
     const { noteService, wnote, untilNotifyGte } = await setup();
     await untilNotifyGte(1);
 
-    const notes = noteService.all();
+    const notes = noteService.list();
 
     expect(notes).toHaveLength(1);
     expect(notes[0].id).toBe(wnote.id());
@@ -65,11 +65,10 @@ describe("NoteService", () => {
     const { storage, noteService, wnote, untilNotifyGte } = await setup();
     await untilNotifyGte(1);
 
-    const bool = noteService.delete(wnote.id());
-    expect(bool).toBeTruthy();
+    noteService.delete(wnote.id());
 
-    const bool2 = await storage.get(wnote.id());
-    expect(bool2).toBeFalsy();
+    const actual = await storage.get(wnote.id());
+    expect(actual).toBeNull();
   });
 
   it("get", async () => {

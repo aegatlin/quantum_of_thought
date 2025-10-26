@@ -1,5 +1,16 @@
 import * as lib from "@/lib";
 
+interface INoteService {
+  subscribe(listener: () => void): () => void;
+
+  list(): lib.notes.Note[];
+
+  create(content: string): lib.notes.Note;
+  get(id: string): lib.notes.Note | null;
+  update(id: string, content: string): lib.notes.Note | null;
+  delete(id: string): void;
+}
+
 /**
  *
  * Add listeners via the subscribe() function to receive updates.
@@ -8,7 +19,7 @@ import * as lib from "@/lib";
  * activity will notify listeners when they are complete.
  *
  */
-export class NoteService {
+export class NoteService implements INoteService {
   #storage: lib.storage.Storage;
   #networks: lib.notes.network.Network[];
 
@@ -29,7 +40,9 @@ export class NoteService {
       });
     });
 
-    this.#allFromStorage();
+    // The in-memory list should be empty but this will also kick of the action
+    // of getting the list from storage.
+    this.list();
   }
 
   subscribe(listener: () => void): () => void {
@@ -37,61 +50,81 @@ export class NoteService {
     return () => this.#listeners.delete(listener);
   }
 
+  #notify() {
+    this.#listeners.forEach((listener) => listener());
+  }
+
   #handleNetworkMessage(message: lib.notes.network.messages.Message): void {
     switch (message.type) {
-      case "notes":
-        this.#syncNotesFromNetwork(message as lib.notes.network.messages.Notes);
-        break;
-      case "note":
-        this.#syncNoteFromNetwork(message as lib.notes.network.messages.Note);
-        break;
-      case "delete":
-        this.#handleDeleteFromNetwork(
-          message as lib.notes.network.messages.Delete,
-        );
-        break;
-    }
-  }
+      case "notes": {
+        const notesMsg = message as lib.notes.network.messages.Notes;
 
-  #syncNotesFromNetwork(notesMsg: lib.notes.network.messages.Notes): void {
-    let hasChanges = false;
+        let hasChanges = false;
 
-    notesMsg.notes.forEach(({ id, bytes }) => {
-      if (!this.#wnotes.has(id)) {
-        hasChanges = true;
-        const wnote = lib.notes.wasmNote.wnote_from_bytes(bytes);
-        this.#wnotes.set(id, wnote);
-        // Also save to storage
-        this.#storage.set(id, bytes);
+        notesMsg.notes.forEach(({ id, bytes }) => {
+          if (!this.#wnotes.has(id)) {
+            hasChanges = true;
+            const wnote = lib.notes.wasmNote.wnote_from_bytes(bytes);
+            this.#wnotes.set(id, wnote);
+            // Also save to storage
+            this.#storage.set(id, bytes);
+          }
+        });
+
+        if (hasChanges) {
+          this.#notify();
+        }
+
+        break;
       }
+      case "note": {
+        const noteMsg = message as lib.notes.network.messages.Note;
+
+        if (!this.#wnotes.has(noteMsg.id)) {
+          const wnote = lib.notes.wasmNote.wnote_from_bytes(noteMsg.bytes);
+          this.#wnotes.set(noteMsg.id, wnote);
+          this.#storage.set(noteMsg.id, noteMsg.bytes);
+          this.#notify();
+        }
+
+        break;
+      }
+      // should the delete message be retransmitted across networks? I assume
+      // yes because it should not be assumed all networks have been informed,
+      // and handling the redundancy of the message should be preferred (so long
+      // as there is no infinite loop).
+      case "delete": {
+        const deleteMsg = message as lib.notes.network.messages.Delete;
+
+        const wasDeleted = this.#wnotes.delete(deleteMsg.id);
+
+        if (wasDeleted) {
+          // Also delete from storage
+          this.#storage.delete(deleteMsg.id);
+          this.#notify();
+        }
+
+        break;
+      }
+    }
+  }
+
+  list(): lib.notes.Note[] {
+    this.#storage.list().then((ids) => {
+      ids.forEach((id) => {
+        if (!this.#wnotes.has(id)) {
+          this.#storage.get(id).then((wnoteData) => {
+            if (wnoteData) {
+              const wnote = lib.notes.wasmNote.wnote_from_bytes(wnoteData);
+              const note = lib.notes.wasmNote.wnote_into_note(wnote);
+              this.#wnotes.set(note.id, wnote);
+            }
+
+            this.#notify();
+          });
+        }
+      });
     });
-
-    if (hasChanges) {
-      this.#notify();
-    }
-  }
-
-  #syncNoteFromNetwork(noteMsg: lib.notes.network.messages.Note): void {
-    if (!this.#wnotes.has(noteMsg.id)) {
-      const wnote = lib.notes.wasmNote.wnote_from_bytes(noteMsg.bytes);
-      this.#wnotes.set(noteMsg.id, wnote);
-      this.#storage.set(noteMsg.id, noteMsg.bytes);
-      this.#notify();
-    }
-  }
-
-  #handleDeleteFromNetwork(deleteMsg: lib.notes.network.messages.Delete): void {
-    const wasDeleted = this.#wnotes.delete(deleteMsg.id);
-
-    if (wasDeleted) {
-      // Also delete from storage
-      this.#storage.delete(deleteMsg.id);
-      this.#notify();
-    }
-  }
-
-  all(): lib.notes.Note[] {
-    this.#allFromStorage();
 
     return Array.from(this.#wnotes.values()).map((wnote) =>
       lib.notes.wasmNote.wnote_into_note(wnote),
@@ -165,9 +198,9 @@ export class NoteService {
     return null;
   }
 
-  delete(id: string): boolean {
+  delete(id: string): void {
     // memory
-    const isDeletedFromMemory = this.#wnotes.delete(id);
+    this.#wnotes.delete(id);
 
     // storage
     this.#storage.delete(id).then(() => {
@@ -178,34 +211,6 @@ export class NoteService {
     const deleteMessage = lib.notes.network.messages.delete_(id);
     this.#networks.forEach((network) => {
       network.send(deleteMessage);
-    });
-
-    return isDeletedFromMemory;
-  }
-
-  #notify() {
-    this.#listeners.forEach((listener) => listener());
-  }
-
-  /**
-   * This function should only call `this.#notify()` if an actual change would
-   * occur in `this.#wnotes`.
-   */
-  #allFromStorage() {
-    this.#storage.list().then((ids) => {
-      ids.forEach((id) => {
-        if (!this.#wnotes.has(id)) {
-          this.#storage.get(id).then((wnoteData) => {
-            if (wnoteData) {
-              const wnote = lib.notes.wasmNote.wnote_from_bytes(wnoteData);
-              const note = lib.notes.wasmNote.wnote_into_note(wnote);
-              this.#wnotes.set(note.id, wnote);
-            }
-
-            this.#notify();
-          });
-        }
-      });
     });
   }
 }

@@ -56,7 +56,7 @@ export class NoteStore {
   }
 
   private updateSnapshot(): void {
-    this.cachedSnapshot = this.noteService.all();
+    this.cachedSnapshot = this.noteService.list();
   }
 
   private notifyListeners(): void {
