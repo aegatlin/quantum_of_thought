@@ -1,5 +1,6 @@
 [tools]
-postgres = "16"
+elixir = "1.19.1-otp-28"
+erlang = "28.1.1"
 
 [env]
 MIX_ENV = "dev"
