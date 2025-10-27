@@ -3,18 +3,21 @@ defmodule QotWeb.NotesChannel do
   alias Qot.Notes
 
   @impl true
-  def join("notes:lobby", _message, socket) do
-    # Subscribe to PubSub topic to receive events from Notes context
-    Phoenix.PubSub.subscribe(Qot.PubSub, "notes:lobby")
+  def join("notes:user:" <> user_id, _message, socket) do
+    if socket.assigns.user_id == user_id do
+      Phoenix.PubSub.subscribe(Qot.PubSub, "notes:user:#{user_id}")
 
-    # Send all existing notes to newly connected client
-    send(self(), :after_join)
-    {:ok, socket}
+      send(self(), :after_join)
+      {:ok, socket}
+    else
+      {:error, %{reason: "unauthorized"}}
+    end
   end
 
   @impl true
   def handle_info(:after_join, socket) do
-    {:ok, notes} = Notes.list()
+    user_id = socket.assigns.user_id
+    {:ok, notes} = Notes.list(user_id)
 
     notes_payload = %{
       type: "notes",
@@ -28,7 +31,6 @@ defmodule QotWeb.NotesChannel do
     {:noreply, socket}
   end
 
-  # Handle PubSub broadcast from Notes context (triggered by HTTP or any source)
   @impl true
   def handle_info({:note_created, note}, socket) do
     push(socket, "message", %{
@@ -50,13 +52,14 @@ defmodule QotWeb.NotesChannel do
     {:noreply, socket}
   end
 
-  # Handle incoming "note" message from WebSocket client
   @impl true
   def handle_in("message", %{"type" => "note", "id" => id, "data" => data}, socket) do
+    user_id = socket.assigns.user_id
+
     case Base.decode64(data) do
       {:ok, binary_data} ->
-        # This will trigger PubSub broadcast to all clients
-        {:ok, _note} = Notes.set(id, binary_data)
+        # This will trigger PubSub broadcast to all user's clients
+        {:ok, _note} = Notes.set(user_id, id, binary_data)
         {:noreply, socket}
 
       :error ->
@@ -64,11 +67,11 @@ defmodule QotWeb.NotesChannel do
     end
   end
 
-  # Handle incoming "delete" message from WebSocket client
   @impl true
   def handle_in("message", %{"type" => "delete", "id" => id}, socket) do
-    # This will trigger PubSub broadcast to all clients
-    :ok = Notes.delete(id)
+    user_id = socket.assigns.user_id
+    # This will trigger PubSub broadcast to all user's clients
+    :ok = Notes.delete(user_id, id)
     {:noreply, socket}
   end
 end
