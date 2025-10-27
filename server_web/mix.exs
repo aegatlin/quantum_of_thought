@@ -33,6 +33,7 @@ defmodule Qot.MixProject do
       {:joken, "~> 2.6"},
       {:phoenix, "~> 1.7.0"},
       {:postgrex, "~> 0.17"},
+      {:resend, "~> 0.4.0"},
       {:swoosh, "~> 1.14"}
     ]
   end
