@@ -24,10 +24,16 @@ defmodule Qot.MixProject do
 
   defp deps do
     [
-      {:phoenix, "~> 1.7.0"},
       {:bandit, "~> 1.0"},
+      {:cors_plug, "~> 3.0"},
+      {:ecto_sql, "~> 3.10"},
+      {:gen_smtp, "~> 1.2"},
+      {:hackney, "~> 1.18"},
       {:jason, "~> 1.2"},
-      {:cors_plug, "~> 3.0"}
+      {:joken, "~> 2.6"},
+      {:phoenix, "~> 1.7.0"},
+      {:postgrex, "~> 0.17"},
+      {:swoosh, "~> 1.14"}
     ]
   end
 end
