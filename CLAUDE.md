@@ -32,11 +32,14 @@ The system consists of four main components:
    - Provides local note management
 
 4. **server_web** (Elixir/Phoenix): Backend server
-   - Main context: `Qot.Notes` - handles note operations and broadcasts via PubSub
-   - WebSocket channel: `QotWeb.NotesChannel` on "notes:lobby"
-   - Storage adapter pattern: `Qot.Storage.Adapter` behavior (currently ETS-based)
-   - All note data operations (HTTP/WebSocket) go through `Qot.Notes` which broadcasts to PubSub
-   - WebSocket clients subscribe to PubSub to receive updates from any source
+   - **Authentication**: Passwordless magic links with JWT access tokens (1hr) and refresh tokens (30 days)
+   - **Main contexts**:
+     - `Qot.Accounts` - user management, magic link auth, token operations
+     - `Qot.Notes` - note operations with per-user isolation
+   - **Per-user note isolation**: All notes scoped by user_id, WebSocket channels are `notes:user:#{user_id}`
+   - **Storage adapter pattern**: `Qot.Storage.Adapter` behavior (currently ETS with composite keys `{user_id, note_id}`)
+   - **PubSub architecture**: All note operations broadcast to per-user topics `notes:user:#{user_id}`
+   - **WebSocket authentication**: JWT token required in socket connect params, verified before channel join
 
 ## Development Commands
 
@@ -124,22 +127,47 @@ cargo test
 
 ### server_web (Elixir/Phoenix)
 
+**Environment Setup:**
+Uses `mise` for tool and environment management. Required environment variables in `mise.local.toml`:
+- `DATABASE_URL` - PostgreSQL connection (e.g., postgresql://localhost/qot_dev)
+- `FRONTEND_URL` - Frontend URL for magic links (e.g., http://localhost:5173)
+- `JWT_SECRET_KEY` - Secret key for signing JWT tokens
+- `RESEND_API_KEY` - API key from resend.com for sending emails
+
+Get dependencies:
+```sh
+cd server_web
+mix deps.get
+```
+
+Run database migrations:
+```sh
+cd server_web
+mix ecto.migrate
+```
+
 Start server in interactive mode:
 ```sh
 cd server_web
 iex -S mix phx.server
 ```
 
-Run tests:
+Run all tests:
 ```sh
 cd server_web
 mix test
 ```
 
-Get dependencies:
+Run specific test file:
 ```sh
 cd server_web
-mix deps.get
+mix test test/path/to/test_file.exs
+```
+
+Run specific test at line:
+```sh
+cd server_web
+mix test test/path/to/test_file.exs:42
 ```
 
 ## Key Implementation Details
@@ -168,8 +196,39 @@ mix deps.get
 5. NoteStore updates snapshot and notifies React
 6. React re-renders components
 
+### Authentication System (Server)
+- **Passwordless authentication**: Magic links sent via email (15 min expiry)
+- **Token architecture**:
+  - Access tokens: JWT, 1 hour expiry, contain user_id claim
+  - Refresh tokens: Random, 30 days expiry, hashed in database
+  - Magic link tokens: Random, 15 min expiry, hashed in database
+- **Auth flow**:
+  1. User requests magic link → stored in `magic_link_tokens` table
+  2. User clicks link → creates/finds user, issues JWT + refresh token
+  3. JWT used for API/WebSocket auth, refresh token for renewal
+- **WebSocket auth**: JWT passed in socket connect params, user_id extracted and assigned to socket
+- **HTTP auth**: `RequireAuth` plug checks Bearer token, assigns user_id to conn
+
+### Per-User Note Isolation (Server)
+- All storage operations require `user_id` parameter
+- ETS keys are composite: `{user_id, note_id}`
+- PubSub topics are per-user: `"notes:user:#{user_id}"`
+- WebSocket channels enforce user matching: `"notes:user:#{user_id}"` only joinable by that user
+- Notes context filters all queries by user_id
+
 ### Storage Adapter Pattern (Server)
-- `Qot.Storage.Adapter` defines the behavior
-- Current implementation: `Qot.Storage.EtsAdapter` (in-memory)
+- `Qot.Storage.Adapter` defines the behavior with user_id in all callbacks
+- Current implementation: `Qot.Storage.EtsAdapter` (in-memory with composite keys)
 - Configured via `config/config.exs`: `config :qot, :storage_adapter, Qot.Storage.EtsAdapter`
 - All storage operations return `{:ok, result}` or `{:error, reason}` tuples
+
+### Testing (Server)
+- Uses Ecto.Adapters.SQL.Sandbox for test database isolation
+- Test email adapter: `Swoosh.Adapters.Test` for magic link emails
+- Test helpers in `test/support/`:
+  - `DataCase` - sets up SQL Sandbox for all database tests
+  - `ConnCase` - HTTP request testing with SQL Sandbox
+  - `ChannelCase` - WebSocket channel testing with SQL Sandbox
+  - `AuthHelpers` - creates authenticated users with JWT tokens
+- ETS table requires manual cleanup in tests: `:ets.delete_all_objects(:qot_notes)`
+- Mix automatically sets `MIX_ENV=test` when running `mix test`
