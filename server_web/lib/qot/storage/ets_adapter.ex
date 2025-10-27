@@ -18,29 +18,37 @@ defmodule Qot.Storage.ETSAdapter do
   end
 
   @impl true
-  def set(id, data) when is_binary(id) and is_binary(data) do
+  def set(user_id, id, data) when is_binary(user_id) and is_binary(id) and is_binary(data) do
     note = %{
       id: id,
-      data: data
+      data: data,
+      user_id: user_id
     }
 
-    :ets.insert(@table, {id, note})
+    # Store with composite key: {user_id, note_id}
+    :ets.insert(@table, {{user_id, id}, note})
     {:ok, note}
   end
 
   @impl true
-  def get(id) when is_binary(id) do
-    case :ets.lookup(@table, id) do
-      [{^id, note}] -> {:ok, note}
+  def get(user_id, id) when is_binary(user_id) and is_binary(id) do
+    case :ets.lookup(@table, {user_id, id}) do
+      [{{^user_id, ^id}, note}] -> {:ok, note}
       [] -> {:error, :not_found}
     end
   end
 
   @impl true
-  def list do
+  def list(user_id) when is_binary(user_id) do
     notes =
       :ets.foldl(
-        fn {_id, note}, acc -> [note | acc] end,
+        fn {{uid, _id}, note}, acc ->
+          if uid == user_id do
+            [note | acc]
+          else
+            acc
+          end
+        end,
         [],
         @table
       )
@@ -49,8 +57,8 @@ defmodule Qot.Storage.ETSAdapter do
   end
 
   @impl true
-  def delete(id) when is_binary(id) do
-    :ets.delete(@table, id)
+  def delete(user_id, id) when is_binary(user_id) and is_binary(id) do
+    :ets.delete(@table, {user_id, id})
     :ok
   end
 end

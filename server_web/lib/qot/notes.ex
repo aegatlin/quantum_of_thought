@@ -9,11 +9,10 @@ defmodule Qot.Notes do
   @storage Application.compile_env(:qot, :storage_adapter)
   @pubsub Qot.PubSub
 
-  def set(id, data) when is_binary(id) and is_binary(data) do
-    case @storage.set(id, data) do
+  def set(user_id, id, data) when is_binary(user_id) and is_binary(id) and is_binary(data) do
+    case @storage.set(user_id, id, data) do
       {:ok, note} = result ->
-        # Broadcast to all WebSocket clients
-        Phoenix.PubSub.broadcast(@pubsub, "notes:lobby", {:note_created, note})
+        Phoenix.PubSub.broadcast(@pubsub, "notes:user:#{user_id}", {:note_created, note})
         result
 
       error ->
@@ -21,19 +20,18 @@ defmodule Qot.Notes do
     end
   end
 
-  def get(id) when is_binary(id) do
-    @storage.get(id)
+  def get(user_id, id) when is_binary(user_id) and is_binary(id) do
+    @storage.get(user_id, id)
   end
 
-  def list do
-    @storage.list()
+  def list(user_id) when is_binary(user_id) do
+    @storage.list(user_id)
   end
 
-  def delete(id) when is_binary(id) do
-    case @storage.delete(id) do
+  def delete(user_id, id) when is_binary(user_id) and is_binary(id) do
+    case @storage.delete(user_id, id) do
       :ok ->
-        # Broadcast to all WebSocket clients
-        Phoenix.PubSub.broadcast(@pubsub, "notes:lobby", {:note_deleted, id})
+        Phoenix.PubSub.broadcast(@pubsub, "notes:user:#{user_id}", {:note_deleted, id})
         :ok
 
       error ->
