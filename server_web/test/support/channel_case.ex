@@ -10,7 +10,8 @@ defmodule QotWeb.ChannelCase do
     end
   end
 
-  setup _tags do
+  setup tags do
+    Qot.DataCase.setup_sandbox(tags)
     :ok
   end
 end

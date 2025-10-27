@@ -5,6 +5,8 @@ defmodule QotWeb.ConnCase do
     quote do
       @endpoint QotWeb.Endpoint
 
+      use Qot.DataCase
+
       import Plug.Conn
       import Phoenix.ConnTest
       import QotWeb.ConnCase
@@ -12,6 +14,7 @@ defmodule QotWeb.ConnCase do
   end
 
   setup _tags do
+    # DataCase already sets up the sandbox, we just need to add conn
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end

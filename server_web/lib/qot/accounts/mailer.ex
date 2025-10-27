@@ -3,6 +3,7 @@ defmodule Qot.Accounts.Mailer do
   Email functionality for authentication (magic links).
   """
 
+  use Swoosh.Mailer, otp_app: :qot
   import Swoosh.Email
 
   @doc """
@@ -38,7 +39,7 @@ defmodule Qot.Accounts.Mailer do
       If you didn't request this email, you can safely ignore it.
       """)
 
-    deliver(email_content)
+    deliver_email(email_content)
   end
 
   defp build_magic_link_url(token) do
@@ -46,10 +47,10 @@ defmodule Qot.Accounts.Mailer do
     "#{frontend_url}/auth/verify?token=#{token}"
   end
 
-  defp deliver(email) do
+  defp deliver_email(email) do
     # In development, Swoosh.Adapters.Local will capture emails
     # You can view them at http://localhost:4000/dev/mailbox (if you add the route)
     # In production, this will use the configured adapter (e.g., Resend)
-    Swoosh.deliver(email, Qot.Accounts.Mailer)
+    deliver(email)
   end
 end

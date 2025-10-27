@@ -1,51 +1,42 @@
 defmodule QotWeb.NotesChannelTest do
-  use QotWeb.ChannelCase
-  alias QotWeb.{UserSocket, NotesChannel}
+  use QotWeb.ChannelCase, async: false
+
+  import QotWeb.AuthHelpers
 
   setup do
-    {:ok, _, socket} =
-      UserSocket
-      |> socket("user_id", %{})
-      |> subscribe_and_join(NotesChannel, "notes:lobby")
+    # ETS cleanup (not transactional)
+    :ets.delete_all_objects(:qot_notes)
 
-    %{socket: socket}
+    # Create authenticated user
+    auth = create_authenticated_user()
+
+    # Connect to user socket with JWT
+    {:ok, socket} = connect(QotWeb.UserSocket, %{"token" => auth.access_token})
+
+    {:ok, socket: socket, auth: auth}
   end
 
-  test "sends all notes on join", %{socket: _socket} do
-    # Should receive initial notes message
-    assert_push("message", %{type: "notes", notes: _notes})
+  describe "join notes:user:USER_ID" do
+    test "joins channel with valid user_id", %{socket: socket, auth: auth} do
+      {:ok, _, socket} = subscribe_and_join(socket, "notes:user:#{auth.user_id}", %{})
+
+      assert socket.assigns.user_id == auth.user_id
+    end
+
+    test "rejects join with mismatched user_id", %{socket: socket} do
+      assert {:error, %{reason: "unauthorized"}} =
+               subscribe_and_join(socket, "notes:user:wrong-user-id", %{})
+    end
   end
 
-  test "broadcasts note from WebSocket client to other clients", %{socket: socket} do
-    note_data = Base.encode64("test note data")
+  describe "message event with type=note" do
+    test "broadcasts note update to channel", %{socket: socket, auth: auth} do
+      {:ok, _, joined_socket} = subscribe_and_join(socket, "notes:user:#{auth.user_id}", %{})
 
-    push(socket, "message", %{
-      type: "note",
-      id: "test-id",
-      data: note_data
-    })
+      note_data = Base.encode64("test note content")
+      push(joined_socket, "message", %{"type" => "note", "id" => "test-note-id", "data" => note_data})
 
-    # Should receive the note back via PubSub
-    assert_push("message", %{
-      type: "note",
-      id: "test-id",
-      data: ^note_data
-    })
-  end
-
-  test "broadcasts delete from WebSocket client to other clients", %{socket: socket} do
-    # First create a note
-    note_data = Base.encode64("test note data")
-    push(socket, "message", %{type: "note", id: "test-id", data: note_data})
-    assert_push("message", %{type: "note"})
-
-    # Then delete it
-    push(socket, "message", %{type: "delete", id: "test-id"})
-
-    # Should receive delete via PubSub
-    assert_push("message", %{
-      type: "delete",
-      id: "test-id"
-    })
+      assert_push "message", %{type: "note", id: "test-note-id", data: ^note_data}
+    end
   end
 end

@@ -119,10 +119,8 @@ defmodule Qot.Accounts do
 
   ## Refresh Token functions
 
-  @doc """
-  Creates a refresh token for a user.
-  Returns {:ok, refresh_token} or {:error, reason}
-  """
+  # Creates a refresh token for a user.
+  # Returns {:ok, refresh_token} or {:error, reason}
   defp create_refresh_token(user_id, token) do
     hashed_token = Token.hash_token(token)
     expires_at = Token.refresh_token_expires_at()

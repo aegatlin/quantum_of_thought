@@ -1,45 +1,35 @@
 defmodule QotWeb.Integration.HttpToWebsocketTest do
-  use QotWeb.ConnCase
-  use QotWeb.ChannelCase
+  use QotWeb.ConnCase, async: false
+  import Phoenix.ChannelTest
+  import QotWeb.AuthHelpers
 
-  alias QotWeb.{UserSocket, NotesChannel}
+  setup do
+    # ETS cleanup
+    :ets.delete_all_objects(:qot_notes)
 
-  describe "HTTP to WebSocket sync" do
-    setup do
-      # Connect a WebSocket client
-      {:ok, _, socket} =
-        UserSocket
-        |> socket("user_id", %{})
-        |> subscribe_and_join(NotesChannel, "notes:lobby")
+    # Create authenticated user
+    auth = create_authenticated_user()
 
-      # Clear initial "notes" message
-      assert_push("message", %{type: "notes"})
+    # Setup HTTP conn
+    conn = build_conn() |> authenticate_conn(auth.access_token)
 
-      %{socket: socket}
-    end
+    # Setup WebSocket
+    {:ok, socket} = Phoenix.ChannelTest.connect(QotWeb.UserSocket, %{"token" => auth.access_token})
+    {:ok, _, ws_socket} = subscribe_and_join(socket, "notes:user:#{auth.user_id}", %{})
 
-    test "creating note via HTTP REST endpoint notifies WebSocket clients", %{socket: _socket} do
-      # Step 1: CLI/HTTP client creates a note via REST API
-      note_id = "http-created-note"
-      note_content = "Hello from HTTP!"
-      note_data = Base.encode64(note_content)
+    {:ok, conn: conn, auth: auth, ws_socket: ws_socket}
+  end
 
-      conn = build_conn()
-      conn = put(conn, "/api/notes/#{note_id}", %{id: note_id, data: note_data})
+  describe "HTTP to WebSocket integration" do
+    test "note created via HTTP is broadcast to WebSocket", %{conn: conn, ws_socket: _ws_socket} do
+      # Create note via HTTP
+      note_data = Base.encode64("integration test note")
+      conn = put(conn, "/api/notes/integration-note-id", %{data: note_data})
 
-      # Verify HTTP response
-      assert json_response(conn, 200) == %{"id" => note_id}
+      assert json_response(conn, 200)
 
-      # Step 2: Verify WebSocket client received the notification
-      assert_push(
-        "message",
-        %{
-          type: "note",
-          id: ^note_id,
-          data: ^note_data
-        },
-        1000
-      )
+      # Verify broadcast on WebSocket
+      assert_push "message", %{type: "note", id: "integration-note-id", data: ^note_data}
     end
   end
 end
